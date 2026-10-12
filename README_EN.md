@@ -1,17 +1,17 @@
-# Emby-In-One
+# Emby-In-One-Next
 
 > **Version: V1.4.5**
 
-[![License: GPL v3](https://img.shields.io/github/license/Takumilove/Emby-In-One?color=blue)](LICENSE)
+[![License: GPL v3](https://img.shields.io/github/license/Takumilove/Emby-In-One-Next?color=blue)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Docker](https://img.shields.io/badge/Docker-20.10+-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
-[![GitHub Release](https://img.shields.io/github/v/release/Takumilove/Emby-In-One?color=green)](https://github.com/Takumilove/Emby-In-One/releases)
-[![GitHub Stars](https://img.shields.io/github/stars/Takumilove/Emby-In-One?style=social)](https://github.com/Takumilove/Emby-In-One)
+[![GitHub Release](https://img.shields.io/github/v/release/Takumilove/Emby-In-One-Next?color=green)](https://github.com/Takumilove/Emby-In-One-Next/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/Takumilove/Emby-In-One-Next?style=social)](https://github.com/Takumilove/Emby-In-One-Next)
 
-[Changelog](Update.md) | [中文文档](README.md) | [Security Policy](SECURITY.md) | [Update Plan](Update%20Plan.md) | [V1.2.1 Legacy Docs](README_V1.2.1.md) | [GitHub](https://github.com/Takumilove/Emby-In-One)
+[Changelog](Update.md) | [中文文档](README.md) | [Security Policy](SECURITY.md) | [Update Plan](Update%20Plan.md) | [V1.2.1 Legacy Docs](README_V1.2.1.md) | [GitHub](https://github.com/Takumilove/Emby-In-One-Next)
 
-> 💡 **Notice**: This project is independently maintained and enhanced from upstream [ArizeSky/Emby-In-One](https://github.com/ArizeSky/Emby-In-One), featuring enhanced third-party client compatibility (including AfuseKt case-insensitive routing and flexible credential support), with community contributions from [@ssabv](https://github.com/ssabv) for netdisk 302 stream pass-through, paged library scanning, and image redirect follow.
+> 💡 **Notice**: This project (**Emby-In-One-Next**) is a next-generation fork and continuous evolution based on [ArizeSky/Emby-In-One](https://github.com/ArizeSky/Emby-In-One). It significantly refactors and improves cross-server Resume and NextUp playback progress aggregation, client routing compatibility (AfuseKt, Yamby, Infuse, etc.), per-user independent watch progress, and high-availability server fallback. It also integrates netdisk 302 stream pass-through, paged library scanning, and image redirect handling contributed by [@ssabv](https://github.com/ssabv). Open-sourced under the GPL-3.0 license with gratitude to upstream creator @chen3861229.
 
 Based on Go language, it implements a multi-server Emby aggregation proxy — merges media libraries from multiple upstream Emby servers into a single unified endpoint accessible by any standard Emby client. Supports multi-user management, independent watch history, UA spoofing, concurrent playback limits, and role-based access control.
 
@@ -69,19 +69,19 @@ Based on Go language, it implements a multi-server Emby aggregation proxy — me
 
 > **Notice for Legacy Node.js Deployment**: If you wish to deploy the V1.2.1 stable Node.js version, please navigate to the [Releases page](https://github.com/ArizeSky/Emby-In-One/releases) of this repository, download the V1.2.1 Source code archive, extract it, and run `bash install.sh`. The `legacy/` directory in this repository keeps the V1.2.1 Node.js source **for reference only** (the Go ID virtualization was written against it); it takes part in no build, image or install of the Go version — see `legacy/README.md`.
 
-This project primarily recommends using Release binaries for V1.4.4 deployment directly on Linux servers (no local Go build required); Docker deployment is suitable for scenarios where you want to build the image yourself.
+This project primarily recommends using Release binaries for V1.4.5 deployment directly on Linux servers (no local Go build required); Docker deployment is suitable for scenarios where you want to build the image yourself.
 
 ### Method 1: Release Binary One-Click Install (Primary Recommendation)
 
 ```bash
-curl -fsSL -o release-install.sh https://raw.githubusercontent.com/Takumilove/Emby-In-One/main/release-install.sh
+curl -fsSL -o release-install.sh https://raw.githubusercontent.com/Takumilove/Emby-In-One-Next/main/release-install.sh
 sudo bash release-install.sh
 ```
 
 Optional: install a specific version.
 
 ```bash
-sudo bash release-install.sh V1.4.4
+sudo bash release-install.sh V1.4.5
 ```
 
 This script will automatically:
@@ -94,8 +94,8 @@ This script will automatically:
 ### Method 2: Source Repo One-Click Install Script (Recommended for developers / local image build)
 
 ```bash
-git clone https://github.com/Takumilove/Emby-In-One.git
-cd Emby-In-One
+git clone https://github.com/Takumilove/Emby-In-One-Next.git
+cd Emby-In-One-Next
 bash install.sh
 ```
 
@@ -774,7 +774,7 @@ Emby-In-One/
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Takumilove/Emby-In-One&type=Date)](https://star-history.com/#Takumilove/Emby-In-One&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Takumilove/Emby-In-One-Next&type=Date)](https://star-history.com/#Takumilove/Emby-In-One-Next&Date)
 
 ---
 

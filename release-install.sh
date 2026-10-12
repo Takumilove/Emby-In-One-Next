@@ -2,11 +2,11 @@
 set -e
 
 # ╔════════════════════════════════════════════════════╗
-# ║       Emby In One (Go) Release 一键安装脚本         ║
-# ║       https://github.com/Takumilove/Emby-In-One     ║
+# ║       Emby In One Next (Go) Release 一键安装脚本    ║
+# ║       https://github.com/Takumilove/Emby-In-One-Next ║
 # ╚════════════════════════════════════════════════════╝
 
-GITHUB_REPO="Takumilove/Emby-In-One"
+GITHUB_REPO="Takumilove/Emby-In-One-Next"
 PROJECT_DIR="/opt/emby-in-one"
 SERVICE_NAME="emby-in-one"
 DEFAULT_PORT=8096

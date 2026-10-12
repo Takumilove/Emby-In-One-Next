@@ -5,12 +5,12 @@ set -e
 set -o pipefail
 
 # ╔════════════════════════════════════════════════════╗
-# ║       Emby In One 一键安装脚本                      ║
+# ║       Emby In One Next 一键安装脚本                 ║
 # ╚════════════════════════════════════════════════════╝
 
 PROJECT_DIR="/opt/emby-in-one"
 # 远程安装时使用的 tarball 地址
-REPO_URL="https://github.com/Takumilove/Emby-In-One/archive/refs/heads/main.tar.gz"
+REPO_URL="https://github.com/Takumilove/Emby-In-One-Next/archive/refs/heads/main.tar.gz"
 
 # ── 颜色 ──
 RED='\033[0;31m'

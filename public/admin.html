@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Emby-in-One 管理面板</title>
+<title>Emby-in-One-Next 管理面板</title>
 <!-- Everything the panel loads is self-hosted under public/vendor/ — see
      public/vendor/README.md. tailwind.css is generated from assets/panel.css by
      `npm run build:panel`; the rules that used to live in an inline <style> block
@@ -20,7 +20,7 @@
       <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 text-white mb-2">
         <i data-lucide="layers" class="w-8 h-8"></i>
       </div>
-      <h1 class="text-2xl font-bold">Emby-in-One</h1>
+      <h1 class="text-2xl font-bold">Emby-in-One-Next</h1>
       <div class="space-y-4 text-left">
         <div v-if="loginError" class="p-3 text-sm text-red-600 bg-red-50 rounded-lg border border-red-100">{{ loginError }}</div>
         <div>
@@ -43,7 +43,7 @@
     </button>
     <div class="ml-2 flex items-center space-x-2">
       <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white"><i data-lucide="layers" class="w-4 h-4"></i></div>
-      <span class="font-bold">Emby-in-One</span>
+      <span class="font-bold">Emby-in-One-Next</span>
     </div>
   </div>
 
@@ -56,7 +56,7 @@
     class="w-64 bg-white border-r border-slate-200 flex-col shrink-0">
     <div class="p-6 font-bold text-lg flex items-center space-x-3">
       <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white"><i data-lucide="layers" class="w-5 h-5"></i></div>
-      <span>Emby-in-One</span>
+      <span>Emby-in-One-Next</span>
     </div>
     <!-- Client Info Card -->
     <div class="mx-4 mb-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
@@ -89,8 +89,8 @@
         <span>退出登录</span>
       </button>
       <div class="px-4 text-[10px] text-slate-400 font-medium">
-        <div>Emby-In-One <span v-if="stats.version" class="text-slate-500">{{ stats.version }}</span></div>
-        <a href="https://github.com/Takumilove/Emby-In-One" target="_blank" class="hover:text-blue-500 transition-colors">GitHub Repository</a>
+        <div>Emby-In-One-Next <span v-if="stats.version" class="text-slate-500">{{ stats.version }}</span></div>
+        <a href="https://github.com/Takumilove/Emby-In-One-Next" target="_blank" class="hover:text-blue-500 transition-colors">GitHub Repository</a>
       </div>
     </div>
   </aside>

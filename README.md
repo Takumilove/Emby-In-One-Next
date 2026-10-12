@@ -1,17 +1,17 @@
-# Emby-In-One
+# Emby-In-One-Next
 
 > **Version: V1.4.5**
 
-[![License: GPL v3](https://img.shields.io/github/license/Takumilove/Emby-In-One?color=blue)](LICENSE)
+[![License: GPL v3](https://img.shields.io/github/license/Takumilove/Emby-In-One-Next?color=blue)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Docker](https://img.shields.io/badge/Docker-20.10+-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
-[![GitHub Release](https://img.shields.io/github/v/release/Takumilove/Emby-In-One?color=green)](https://github.com/Takumilove/Emby-In-One/releases)
-[![GitHub Stars](https://img.shields.io/github/stars/Takumilove/Emby-In-One?style=social)](https://github.com/Takumilove/Emby-In-One)
+[![GitHub Release](https://img.shields.io/github/v/release/Takumilove/Emby-In-One-Next?color=green)](https://github.com/Takumilove/Emby-In-One-Next/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/Takumilove/Emby-In-One-Next?style=social)](https://github.com/Takumilove/Emby-In-One-Next)
 
-[更新日志](Update.md) | [English README](README_EN.md) | [安全策略](SECURITY.md) | [更新计划](Update%20Plan.md) | [V1.2.1 旧版文档](README_V1.2.1.md) | [GitHub](https://github.com/Takumilove/Emby-In-One)
+[更新日志](Update.md) | [English README](README_EN.md) | [安全策略](SECURITY.md) | [更新计划](Update%20Plan.md) | [V1.2.1 旧版文档](README_V1.2.1.md) | [GitHub](https://github.com/Takumilove/Emby-In-One-Next)
 
-> 💡 **项目说明**：本项目基于原作者 [ArizeSky/Emby-In-One](https://github.com/ArizeSky/Emby-In-One) 进行独立维护与持续演进，特别增强了对第三方客户端（如 AfuseKt 等）的路由大小写兼容与多种登录凭据格式支持；同时合流吸收了 [@ssabv](https://github.com/ssabv) 贡献的网盘服 302 直链透传、分页扫描与图片重定向跟随修复。
+> 💡 **项目说明**：本项目（**Emby-In-One-Next**）基于原作者 [ArizeSky/Emby-In-One](https://github.com/ArizeSky/Emby-In-One) 的开源成果深度二次开发与持续演进。特别增强并重构了跨服“继续观看”（Resume）与“接下来观看”（NextUp）聚合同步、多客户端路由兼容（如 AfuseKt、Yamby、Infuse 等）、多用户独立播放历史与高可用容错降级；同时合流吸收了 [@ssabv](https://github.com/ssabv) 贡献的网盘服 302 直链透传、分页扫描与图片重定向跟随修复。遵循 GPL-3.0 协议开源，感谢原作者 @chen3861229 的杰出贡献。
 
 基于Go语言实现的多台 Emby 服务器聚合代理，将多个上游 Emby 服务器的媒体库合并为一个统一入口，支持任何标准 Emby 客户端访问。支持多用户管理、独立观看历史、UA伪装、并发播放数限制和角色权限隔离。
 
@@ -69,19 +69,19 @@
 
 > **旧版 Node.js 部署说明**：如果您希望部署基于 Node.js 的 V1.2.1 稳定版，请前往本仓库的 [Releases 页面](https://github.com/ArizeSky/Emby-In-One/releases) 下载 V1.2.1 的 Source code 源码压缩包，解压后同样运行 `bash install.sh` 即可。 仓库中的 `legacy/` 目录保留了 V1.2.1 的 Node.js 源码，**仅供对照参考**（Go 版的 ID 虚拟化以它为蓝本），它不参与 Go 版的构建、镜像或安装流程，详见 `legacy/README.md`。
 
-本项目优先推荐在 Linux 服务器直接使用 Release 二进制部署 V1.4.4（无需本地编译）；Docker 方式适合希望自行构建镜像的场景。
+本项目优先推荐在 Linux 服务器直接使用 Release 二进制部署 V1.4.5（无需本地编译）；Docker 方式适合希望自行构建镜像的场景。
 
 ### 方式一：Release 二进制一键安装（首推）
 
 ```bash
-curl -fsSL -o release-install.sh https://raw.githubusercontent.com/Takumilove/Emby-In-One/main/release-install.sh
+curl -fsSL -o release-install.sh https://raw.githubusercontent.com/Takumilove/Emby-In-One-Next/main/release-install.sh
 sudo bash release-install.sh
 ```
 
 可选：指定版本安装。
 
 ```bash
-sudo bash release-install.sh V1.4.4
+sudo bash release-install.sh V1.4.5
 ```
 
 该脚本会自动完成：
@@ -94,8 +94,8 @@ sudo bash release-install.sh V1.4.4
 ### 方式二：源码仓库一键安装脚本（推荐开发者/希望本地构建镜像）
 
 ```bash
-git clone https://github.com/Takumilove/Emby-In-One.git
-cd Emby-In-One
+git clone https://github.com/Takumilove/Emby-In-One-Next.git
+cd Emby-In-One-Next
 bash install.sh
 ```
 
@@ -776,7 +776,7 @@ Emby-In-One/
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Takumilove/Emby-In-One&type=Date)](https://star-history.com/#Takumilove/Emby-In-One&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Takumilove/Emby-In-One-Next&type=Date)](https://star-history.com/#Takumilove/Emby-In-One-Next&Date)
 
 ---
 
