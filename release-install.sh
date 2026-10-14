@@ -170,14 +170,9 @@ fi
 BINARY_NAME="Emby-In-One-Next-linux-${ARCH}-${FILE_VERSION}"
 DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/${BINARY_NAME}"
 
-# ── 旧版 Release 无校验和产物 ──
-# .sha256 产物自 V1.4.4-rc1 起才随 Release 发布。未指定版本时脚本会解析"最新稳定版"，
-# 在 V1.4.4 正式版发布前那是 V1.4.3——没有校验和可校验，对这些版本默认跳过校验。
-SKIP_SHA256=false
-if version_lte "${RELEASE_TAG}" "V1.4.3"; then
-  SKIP_SHA256=true
-  warn "目标版本 ${RELEASE_TAG} 为 V1.4.3 及以下旧版 Release，未附带校验和产物，跳过完整性校验"
-fi
+# ── 校验和设置 ──
+# Emby-In-One-Next 自 V1.0.0 起均随 Release 发布对应的 .sha256 校验产物
+SKIP_SHA256=${SKIP_SHA256:-false}
 
 # ── 升级检测 ──
 # 目录已存在即视为已有安装: Docker 部署（或上次安装失败残留）的目录里没有
@@ -277,6 +272,12 @@ if [[ "$IS_UPGRADE" == true ]]; then
     info "正在停止服务..."
     systemctl stop "${SERVICE_NAME}"
     _SERVICE_WAS_RUNNING=true
+  fi
+  # 若旧版服务 emby-in-one 仍在运行，一并停止并禁用，避免 8096 端口冲突
+  if systemctl is-active --quiet "emby-in-one" 2>/dev/null; then
+    info "检测到旧版服务 emby-in-one 正在运行，正在停止并禁用..."
+    systemctl stop emby-in-one 2>/dev/null || true
+    systemctl disable emby-in-one 2>/dev/null || true
   fi
   # 已有安装目录里可能没有二进制（例如原先是 Docker 部署）
   if [[ -f "${PROJECT_DIR}/emby-in-one-next" ]]; then
