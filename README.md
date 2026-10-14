@@ -6,6 +6,7 @@
 **Unify Multiple Emby Servers into One Seamless, High-Performance Media Gateway**
 
 [![Release](https://img.shields.io/github/v/release/Takumilove/Emby-In-One-Next?color=brightgreen&label=Release&logo=github)](https://github.com/Takumilove/Emby-In-One-Next/releases)
+[![Stars](https://img.shields.io/github/stars/Takumilove/Emby-In-One-Next?color=yellow&label=Stars&logo=github)](https://github.com/Takumilove/Emby-In-One-Next/stargazers)
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
@@ -88,10 +89,27 @@
 
 ## 🖼️ 预览
 
-![预览图1](https://cdn.nodeimage.com/i/D293pIQcFNx4gXkfskPbnXFzmgCQ1JPx.webp)
-![预览图2](https://cdn.nodeimage.com/i/iDAXrYaIXdm9efhwl2BtqJjRUmGfTSKU.webp)
-![预览图3](https://cdn.nodeimage.com/i/K4jhTTMjv8rkHYiPNbXKUC0kXIzAXgq0.webp)
-![预览图4](https://cdn.nodeimage.com/i/jCilzHTw7vzRJYaQFtbvd8ZOEaTxZvk6.webp)
+<div align="center">
+
+![客户端首页继续观看与进度条](docs/images/preview-1.png)
+*客户端首页：跨服「继续观看」与「接下来播放」无缝聚合，进度条精准渲染（以 Hills Lite 为例）*
+
+<br/>
+
+![剧集单集聚合与版本详情](docs/images/preview-2.png)
+*播放详情页：电视剧季集列表聚合、断点续播与 4K HDR 多版本片源识别*
+
+<br/>
+
+![Web后台用户管理](docs/images/preview-3.png)
+*Web 管理后台：多用户体系与多服务器权限管理*
+
+<br/>
+
+![首页媒体库按需隐藏](docs/images/preview-4.png)
+*Web 管理后台：首页媒体库个性化隐藏（自由定制每个用户的首页入口）*
+
+</div>
 
 ---
 
@@ -305,6 +323,12 @@ Emby-In-One-Next/
 ├── release-install.sh              # 预编译静态二进制一键部署脚本
 └── emby-in-one-next-cli.sh         # 交互式 SSH 终端管理脚本
 ```
+
+---
+
+## 📈 Star 历史趋势
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Takumilove/Emby-In-One-Next&type=Date)](https://star-history.com/#Takumilove/Emby-In-One-Next&Date)
 
 ---
 

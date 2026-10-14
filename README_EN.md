@@ -6,6 +6,7 @@
 **Unify Multiple Emby Servers into One Seamless, High-Performance Media Gateway**
 
 [![Release](https://img.shields.io/github/v/release/Takumilove/Emby-In-One-Next?color=brightgreen&label=Release&logo=github)](https://github.com/Takumilove/Emby-In-One-Next/releases)
+[![Stars](https://img.shields.io/github/stars/Takumilove/Emby-In-One-Next?color=yellow&label=Stars&logo=github)](https://github.com/Takumilove/Emby-In-One-Next/stargazers)
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
@@ -83,6 +84,32 @@
 - **Embedded Web Admin Panel**: Vue 3 + Tailwind CSS dashboard bundled into the binary with 0 external CDN dependencies.
 - **Interactive SSH CLI**: Type `emby-in-one-next` (or `emby-in-one`) to launch a color-coded management menu for updates, credentials, and logs.
 - **Pure Static Binary**: Go compilation with zero glibc dependencies for rock-solid portability.
+
+---
+
+## 🖼️ Preview
+
+<div align="center">
+
+![Client Home Continue Watching](docs/images/preview-1.png)
+*Client Homepage: Seamless Cross-Server "Continue Watching" & "NextUp" with Precise Progress Bars (e.g. Hills Lite)*
+
+<br/>
+
+![Episode Merging & MediaSources](docs/images/preview-2.png)
+*Playback & Episode Details: TV Show Season/Episode Merging, Resume Playback & 4K HDR MediaSources*
+
+<br/>
+
+![Admin User Management](docs/images/preview-3.png)
+*Web Admin Dashboard: Multi-User System & Upstream Server Permissions*
+
+<br/>
+
+![Library Visibility Management](docs/images/preview-4.png)
+*Web Admin Dashboard: Custom Home Library Visibility for Individual Users*
+
+</div>
 
 ---
 
@@ -293,6 +320,12 @@ Emby-In-One-Next/
 ├── release-install.sh              # Precompiled binary installation script
 └── emby-in-one-next-cli.sh         # Interactive SSH CLI management script
 ```
+
+---
+
+## 📈 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Takumilove/Emby-In-One-Next&type=Date)](https://star-history.com/#Takumilove/Emby-In-One-Next&Date)
 
 ---
 
