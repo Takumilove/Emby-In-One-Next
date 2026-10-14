@@ -343,6 +343,17 @@ chown -R 1000:1000 "${PROJECT_DIR}/config" "${PROJECT_DIR}/data" 2>/dev/null || 
 }
 
 # ── 9. 启动容器 ──
+# 停止旧版可能占用的服务或容器，避免 8096 端口冲突
+if command -v systemctl &>/dev/null && systemctl is-active --quiet emby-in-one 2>/dev/null; then
+  info "检测到宿主机旧版服务 emby-in-one 正在运行，正在停止并禁用..."
+  systemctl stop emby-in-one 2>/dev/null || true
+  systemctl disable emby-in-one 2>/dev/null || true
+fi
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^emby-in-one$"; then
+  info "检测到旧版容器 emby-in-one 正在运行，正在停止..."
+  docker stop emby-in-one 2>/dev/null || true
+fi
+
 info "构建并启动容器..."
 cd "${PROJECT_DIR}"
 docker compose build --quiet
