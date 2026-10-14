@@ -61,7 +61,7 @@ func TestHelperProcessResetPassword(t *testing.T) {
 	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
 		return
 	}
-	args := []string{"emby-in-one"}
+	args := []string{"emby-in-one-next"}
 	sep := -1
 	for i, arg := range os.Args {
 		if arg == "--" {

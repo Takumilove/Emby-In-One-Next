@@ -149,7 +149,7 @@ func TestLogsDownloadSupportsQueryTokenAuth(t *testing.T) {
 		if ct := rr.Header().Get("Content-Type"); ct != "text/plain; charset=utf-8" {
 			t.Fatalf("content-type = %q, want text/plain; charset=utf-8", ct)
 		}
-		if disp := rr.Header().Get("Content-Disposition"); !strings.Contains(disp, "emby-in-one.log") {
+		if disp := rr.Header().Get("Content-Disposition"); !strings.Contains(disp, "emby-in-one-next.log") && !strings.Contains(disp, "emby-in-one.log") {
 			t.Fatalf("content-disposition = %q, want attachment filename", disp)
 		}
 		if !strings.Contains(rr.Body.String(), "log line for query token test") {

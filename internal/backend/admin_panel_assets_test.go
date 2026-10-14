@@ -250,7 +250,7 @@ func TestAdminPanelIsServedFromTheDirectoryURL(t *testing.T) {
 		// http.FileServer answers a directory with a listing under the same 200, so the
 		// assertion has to be about which of the two pages came back, not the status.
 		body := fetchAdminPath(t, handler, "/admin/").Body.String()
-		if !strings.Contains(body, "<title>Emby-in-One 管理面板</title>") {
+		if !strings.Contains(body, "<title>Emby-in-One-Next 管理面板</title>") && !strings.Contains(body, "<title>Emby-in-One 管理面板</title>") {
 			t.Fatalf("GET /admin/ answered with something other than the panel: %.200s", body)
 		}
 	})
