@@ -8,9 +8,15 @@ set -o pipefail
 # ║       Emby In One Next 一键安装脚本                 ║
 # ╚════════════════════════════════════════════════════╝
 
-PROJECT_DIR="/opt/emby-in-one"
+PROJECT_DIR="/opt/emby-in-one-next"
 # 远程安装时使用的 tarball 地址
 REPO_URL="https://github.com/Takumilove/Emby-In-One-Next/archive/refs/heads/main.tar.gz"
+
+# 平滑迁移：若存在旧版 /opt/emby-in-one 且尚未创建新目录，自动复制已有配置与数据
+if [[ ! -d "${PROJECT_DIR}" && -d "/opt/emby-in-one" ]]; then
+  echo -e "\033[0;32m[信息]\033[0m 检测到旧版目录 /opt/emby-in-one，正在平滑迁移至 ${PROJECT_DIR}..."
+  cp -r /opt/emby-in-one "${PROJECT_DIR}"
+fi
 
 # ── 颜色 ──
 RED='\033[0;31m'
@@ -194,33 +200,33 @@ COPY third_party ./third_party
 COPY cmd ./cmd
 COPY internal ./internal
 COPY public ./public
-RUN CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=${VERSION}" -o /out/emby-in-one ./cmd/emby-in-one
+RUN CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=${VERSION}" -o /out/emby-in-one-next ./cmd/emby-in-one-next
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata wget && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 RUN mkdir -p /app/config /app/data /app/public
 COPY public ./public
-COPY --from=builder /out/emby-in-one ./emby-in-one
+COPY --from=builder /out/emby-in-one-next ./emby-in-one-next
 # 非 root 运行 (uid 1000，与 docker-compose.yml 的 user 一致)
 RUN useradd -r -u 1000 -U -s /usr/sbin/nologin eio && chown -R eio:eio /app
 USER eio
 EXPOSE 8096
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8096/System/Info/Public || exit 1
-CMD ["./emby-in-one"]
+CMD ["./emby-in-one-next"]
 EOF
 }
 
 write_runtime_compose() {
   cat > "${PROJECT_DIR}/docker-compose.yml" <<'EOF'
 services:
-  emby-in-one:
+  emby-in-one-next:
     build:
       context: .
       args:
-        VERSION: v1.4.4-rc1
-    container_name: emby-in-one
+        VERSION: v1.0.0
+    container_name: emby-in-one-next
     # 容器以 uid 1000 运行，挂载目录需先 chown 1000:1000（install.sh 已处理）
     user: "1000:1000"
     ports:
@@ -247,7 +253,7 @@ copy_distribution_layout() {
   done
 
   info "从 ${base} 复制 Go 独立发行目录文件..."
-  for item in cmd internal third_party public go.mod README.md README_EN.md Update.md emby-in-one-cli.sh .dockerignore LICENSE; do
+  for item in cmd internal third_party public go.mod README.md README_EN.md Update.md emby-in-one-next-cli.sh emby-in-one-cli.sh .dockerignore LICENSE; do
     copy_item "${base}/${item}" "${PROJECT_DIR}/"
   done
   write_runtime_dockerfile
@@ -295,7 +301,7 @@ if [[ ! -f "${PROJECT_DIR}/config/config.yaml" ]]; then
   cat > "${PROJECT_DIR}/config/config.yaml" <<EOF
 server:
   port: 8096
-  name: "Emby-In-One"
+  name: "Emby-In-One-Next"
 
 admin:
   username: "${ADMIN_USER}"
@@ -345,7 +351,7 @@ _CONTAINERS_STARTED=true
 
 # 以非 root 运行时权限不对会让容器立刻退出，这里明确提示而不是假报成功
 sleep 2
-CONTAINER_STATE=$(docker inspect --format '{{.State.Status}}' emby-in-one 2>/dev/null || echo "")
+CONTAINER_STATE=$(docker inspect --format '{{.State.Status}}' emby-in-one-next 2>/dev/null || echo "")
 if [[ "$CONTAINER_STATE" != "running" ]]; then
   warn "容器当前状态: ${CONTAINER_STATE:-未知}，请检查日志: docker compose -f ${PROJECT_DIR}/docker-compose.yml logs"
 fi
@@ -366,7 +372,7 @@ fi
 SERVER_IP=${SERVER_IP:-'<服务器IP>'}
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║         ${GREEN}Emby In One 安装完成！${NC}${BOLD}                        ║${NC}"
+echo -e "${BOLD}║         ${GREEN}Emby In One Next 安装完成！${NC}${BOLD}                  ║${NC}"
 echo -e "${BOLD}╠══════════════════════════════════════════════════════╣${NC}"
 echo -e "${BOLD}║${NC}                                                      ${BOLD}║${NC}"
 echo -e "${BOLD}║${NC}  管理员用户名: ${CYAN}${ADMIN_USER}${NC}"
@@ -378,7 +384,7 @@ echo -e "${BOLD}║${NC}                                                      ${
 echo -e "${BOLD}║${NC}  ${YELLOW}请妥善保管以上凭据！${NC}                                ${BOLD}║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
 if is_hashed_password "$ADMIN_PASS"; then
-  echo -e "${YELLOW}提示：当前配置中的管理员密码已加密存储，无法直接查看。如需重置，请使用 SSH 菜单 emby-in-one。${NC}"
+  echo -e "${YELLOW}提示：当前配置中的管理员密码已加密存储，无法直接查看。如需重置，请使用 SSH 菜单 emby-in-one-next（或 emby-in-one）。${NC}"
 fi
 if [[ "$SERVER_IP" =~ ^(10\.|127\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.) ]]; then
   echo -e "${YELLOW}提示：检测到内网地址（NAT / 端口映射环境），请以实际公网地址访问。${NC}"
@@ -386,14 +392,22 @@ fi
 echo ""
 
 # ── 11. 安装 CLI 管理脚本 ──
-if [[ -e "${SCRIPT_DIR}/emby-in-one-cli.sh" ]]; then
-  cp "${SCRIPT_DIR}/emby-in-one-cli.sh" /usr/local/bin/emby-in-one
-  chmod +x /usr/local/bin/emby-in-one
-  info "SSH 管理脚本已安装，输入 ${CYAN}emby-in-one${NC} 即可使用管理菜单"
+CLI_SRC=""
+if [[ -e "${SCRIPT_DIR}/emby-in-one-next-cli.sh" ]]; then
+  CLI_SRC="${SCRIPT_DIR}/emby-in-one-next-cli.sh"
+elif [[ -e "${PROJECT_DIR}/emby-in-one-next-cli.sh" ]]; then
+  CLI_SRC="${PROJECT_DIR}/emby-in-one-next-cli.sh"
+elif [[ -e "${SCRIPT_DIR}/emby-in-one-cli.sh" ]]; then
+  CLI_SRC="${SCRIPT_DIR}/emby-in-one-cli.sh"
 elif [[ -e "${PROJECT_DIR}/emby-in-one-cli.sh" ]]; then
-  cp "${PROJECT_DIR}/emby-in-one-cli.sh" /usr/local/bin/emby-in-one
-  chmod +x /usr/local/bin/emby-in-one
-  info "SSH 管理脚本已安装，输入 ${CYAN}emby-in-one${NC} 即可使用管理菜单"
+  CLI_SRC="${PROJECT_DIR}/emby-in-one-cli.sh"
+fi
+
+if [[ -n "$CLI_SRC" ]]; then
+  cp -f "$CLI_SRC" /usr/local/bin/emby-in-one-next
+  chmod +x /usr/local/bin/emby-in-one-next
+  ln -sf /usr/local/bin/emby-in-one-next /usr/local/bin/emby-in-one
+  info "SSH 管理脚本已安装，输入 ${CYAN}emby-in-one-next${NC} 或 ${CYAN}emby-in-one${NC} 即可使用管理菜单"
 fi
 
 info "安装完成！"

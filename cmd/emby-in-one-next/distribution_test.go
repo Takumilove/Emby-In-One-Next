@@ -25,9 +25,9 @@ func TestShellScriptsDoNotUseUTF8BOM(t *testing.T) {
 	root := repoRootPath()
 	candidates := existingPaths(
 		filepath.Join(root, "install.sh"),
-		filepath.Join(root, "emby-in-one-cli.sh"),
+		filepath.Join(root, "emby-in-one-next-cli.sh"),
 		filepath.Join(root, "Emby-In-One-Go", "install.sh"),
-		filepath.Join(root, "Emby-In-One-Go", "emby-in-one-cli.sh"),
+		filepath.Join(root, "Emby-In-One-Go", "emby-in-one-next-cli.sh"),
 	)
 	for _, path := range candidates {
 		data, err := os.ReadFile(path)
@@ -88,9 +88,9 @@ func TestShellScriptsUseLFLineEndings(t *testing.T) {
 	root := repoRootPath()
 	candidates := existingPaths(
 		filepath.Join(root, "install.sh"),
-		filepath.Join(root, "emby-in-one-cli.sh"),
+		filepath.Join(root, "emby-in-one-next-cli.sh"),
 		filepath.Join(root, "Emby-In-One-Go", "install.sh"),
-		filepath.Join(root, "Emby-In-One-Go", "emby-in-one-cli.sh"),
+		filepath.Join(root, "Emby-In-One-Go", "emby-in-one-next-cli.sh"),
 	)
 	for _, path := range candidates {
 		data, err := os.ReadFile(path)

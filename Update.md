@@ -1,20 +1,43 @@
-# Emby-In-One 更新日志
+# Emby-In-One-Next 更新日志
 
-## V1.4.5
+## V1.0.0
 
-发布日期：2026-10-10（V1.4.5 正式版）
+发布日期：2026-10-12（Emby-In-One-Next 独立首发正式版）
 
-### 客户端兼容性与首页继续观看修复
+> 🎉 **Emby-In-One-Next 启航**：本项目基于原版 [Emby-In-One](https://github.com/ArizeSky/Emby-In-One) 的开源成果进行深度二次开发与下一代架构演化，正式开启 **V1.0.0** 独立版本线！遵循 GPL-3.0 协议开源，感谢原作者 @chen3861229 的开创性贡献以及社区开发者（如 @ssabv）的宝贵实践。
 
-- **首页继续观看（Resume）上游元数据拉取修复**：
-  - 修复普通用户「继续观看」在上游拉取项目元数据时直接请求 `/Items` 导致上游非管理员账号返回 403 Forbidden 的问题；重构为携带上游用户作用域的 `/Users/{userId}/Items` 及 `UserId` 参数，且在失败时自动回退 `/Items`。
-  - 查询参数新增 `Recursive=true`，确保 Emby 能够递归搜索媒体库内的所有剧集单集与电影项目。
-  - 新增上游单项逐个拉取回退机制（`GET /Users/{userId}/Items/{itemId}`），即使上游批量 `Ids` 查询因版本差异漏项，也能 100% 成功兜底拉取对应视频信息。
-  - 优化系列页面按 `ParentId` 过滤逻辑，基于本地可续播列表精准匹配，避免被全局限制截断。
-  - 补全上游拉取失败时的告警日志，便于排查网络与权限问题。
-- **第三方客户端接口路由兼容扩展**：
-  - 注册 `GET /Items/Resume` 路由，兼容不带用户路径前缀的 Emby 客户端继续观看请求。
-  - 注册 `GET /Users/{userId}/Shows/NextUp` 路由，兼容携带用户路径前缀的接下来播放请求。
+### 🌟 核心改进与多端播放全面兼容
+
+- **跨服「继续观看」（Resume）全客户端深度兼容**：
+  - **全路由覆盖**：补充注册 `GET /Items/Resume` 与 `GET /Users/{userId}/Items/Resume`，全面兼容 Emby 官方网页端/App、AfuseKt、Yamby、Infuse 等各主流客户端的调用习惯。
+  - **上游元数据穿透与双向回退**：对非管理员上游账号采用 `/Users/{userId}/Items` 递归查询，失败时自动双向回退至 `/Items`，彻底解决非管理员账号上报 403 Forbidden 导致继续观看卡片为空的顽疾。
+  - **元数据动态丰满与百分比补全**：自动回溯补全上游缺失的 `RunTimeTicks`（总时长）、`SeriesPrimaryImageTag`、`SeriesName`，并在 UserData 覆盖层中实时计算 `PlayedPercentage`，彻底解决部分客户端因缺少总时长指标而丢弃卡片的问题。
+  - **单项逐个兜底拉取**：在批量拉取元数据遭遇上游权限异常或漏项时，自动降级为单项逐个并发兜底拉取，保障继续观看记录 100% 不丢失。
+- **跨服「接下来观看」（NextUp）剧集聚合与双路由拦截**：
+  - 支持跨多台上游服务器聚合剧集未播下一集，智能过滤已完结及无效条目。
+  - 补充 `GET /Users/{userId}/Shows/NextUp` 与 `GET /Shows/NextUp` 双路由支持；单集查询自动适配用户作用域端点与通用端点回退。
+- **播放信息（PlaybackInfo）用户端点补齐与多版本片源合并**：
+  - 补充注册 `GET /Users/{userId}/Items/{itemId}/PlaybackInfo` 与 `POST /Users/{userId}/Items/{itemId}/PlaybackInfo` 用户作用域路由。
+  - 解决各类第三方播放器播放时无法触发多服务器片源版本（MediaSources）合并与最大并发数限制（`maxConcurrent`）的问题，保障控流与多服选源全面生效。
+- **电视剧单集与季度端点用户作用域补齐**：
+  - 补充注册 `GET /Users/{userId}/Shows/{seriesId}/Episodes` 与 `GET /Users/{userId}/Shows/{seriesId}/Seasons`。
+  - 剧集列表全面接入跨服去重、多源汇聚与每用户独立观看进度（UserData）覆盖，不再退化为单服代理。
+- **单项查询与推荐路由统一**：
+  - 统一 `GET /Items/{itemId}` 与 `GET /Users/{userId}/Items/{itemId}` 实现，自动享有跨服版本合并、非管理员权限穿透与本地观看历史覆盖。
+  - 补充注册 `GET /Users/{userId}/Items/{itemId}/Similar`、`GET /Users/{userId}/Items/{itemId}/ThemeMedia`、`GET /Users/{userId}/Search/Hints` 与 `GET /Items/Latest`。
+- **网盘服 302 直链透传与分页优化（吸收合流 @ssabv 贡献）**：
+  - **媒体流直链 302 透传（`directRedirect`）**：针对网盘/STRM 上游，支持将网盘签名 CDN 直链直接 302 重定向给播放器，大幅节省代理服务器带宽，支持多跳重定向链解析。
+  - **图片 302 重定向跟随**：修复网盘服海报 302 跳转导致的破图问题，图片代理自动追踪跳转链。
+  - **上游分页扫描（`pagedScan`）**：针对限制单次大查询的魔改上游，支持每页 200 条分批分页拉取，防止 400 报错。
+- **协议兼容与大小写容错**：
+  - 修复 Go 路由严格大小写敏感导致的兼容性问题，自动规范化 Emby 静态路由段，同时保持动态 ID 原样传递。
+  - 增强 `AuthenticateByName` 兼容 `application/json`、`application/x-www-form-urlencoded` 表单及 URL Query 等多种提交格式。
+- **品牌与部署架构全方位升级**：
+  - 全新确立 **Emby-In-One-Next** 品牌独立定位，开启 V1.0.0 正式版发行线。
+  - 默认部署目录更新为 `/opt/emby-in-one-next`，一键安装脚本内置从旧版 `/opt/emby-in-one` 的自动平滑数据迁移。
+  - SSH 管理菜单更新为 `emby-in-one-next-cli.sh`，同时创建软链接提供 `emby-in-one-next` 与 `emby-in-one` 双指令兼容。
+  - 日志系统迁移为 `emby-in-one-next.log`，并保持向下兼容自动识别。
+  - GitHub Actions 自动化发布工作流构建全架构（amd64、arm64、arm、mips、mipsle、riscv64）纯静态二进制产物。
 
 ## V1.4.4
 
@@ -31,21 +54,6 @@
 - **四个筛选项对普通用户仍是上游语义**，见「已知限制」。
 - **代理模式 HLS 清单重写行为修复**：此前 Go 版把 HLS 清单里的分片 URL 重写为**上游主机的绝对地址**（携带虚拟 ID 与代理 token，客户端实际无法使用，HLS 转码播放会失败）。现恢复为**代理相对路径**——分片请求回到本代理，与 Node 版 V1.2 的既定行为一致。已配置反向代理 / 公网域名的部署无需任何改动。
 - **推流线路旧配置无需迁移**：旧配置里的单条 `streamingUrl` 键继续有效，保存时自动并入新的有序列表。
-
-### 客户端兼容性与网盘服优化（Takumilove 维护版）
-
-- **路由大小写规范化匹配**：修复 Go 标准库路由严格大小写敏感导致的兼容性问题，解决 AfuseKt 等客户端请求小写路径 `/Users/authenticatebyname` 被误判落入兜底路由导致 401 的问题；自动对所有 Emby 静态路由段进行标准大驼峰规范化，同时保持动态 ID 原样传递。
-- **多种登录凭据提交格式支持**：`AuthenticateByName` 接口增强为同时兼容 `application/json`、`application/x-www-form-urlencoded` 表单提交以及 URL Query 参数。
-- **管理员账号大小写兼容**：管理员账号比对改为大小写不敏感（`strings.EqualFold`）。
-- **Token 头字段兼容**：支持 `Token=`、`token=`、`Token="` 与 `token="`。
-- **播放状态与继续观看管理**：完整支持客户端手动「标记已播放」（`POST /PlayedItems`）与「标记未播放」（`DELETE /PlayedItems`），并支持从「继续观看」中移除视频（`POST /HideFromResume`），本地 SQLite 数据库同步双写持久化，即时生效。
-- **首页继续观看与播放进度指标补全**：修复首页「继续观看」卡片未展示的问题，在聚合元数据查询时补齐 `RunTimeTicks`、`SeriesPrimaryImageTag`、`SeriesName`、`SeriesId`、`SeasonId` 字段，并在本地 `UserData` 覆盖层中自动计算并注入 `PlayedPercentage` 进度百分比，确保第三方客户端（如 AfuseKt、VidHub）及 Web 端能正确识别并渲染有效进度条。
-- **合流社区贡献（鸣谢 [@ssabv](https://github.com/ssabv)）**：
-  - **媒体流直链 302 透传（`directRedirect`）**：针对网盘/STRM 上游，支持将网盘签名 CDN 直链直接 302 重定向给播放器，大幅节省代理服务器带宽，支持多跳重定向链解析。
-  - **图片 302 重定向跟随**：修复网盘服海报 302 跳转导致的破图问题，图片代理自动追踪跳转链。
-  - **上游分页扫描（`pagedScan`）**：针对限制单次大查询的魔改上游，支持每页 200 条分批分页拉取，防止 400 报错。
-  - **更智能的影片去重与海报优先**：跨服去重支持 Tmdb ID / 名称+年份匹配，且同等优先级下优先保留带有海报的副本。
-  - **多架构 Docker 镜像自动构建**：推送到 main 时自动编译发布多架构镜像至 GHCR。
 
 ### 安全增强
 

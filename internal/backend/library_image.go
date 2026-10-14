@@ -27,10 +27,17 @@ func (a *App) registerLibraryAndImageRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("GET /"+current, a.withContext(a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			a.handleLibraryTaxonomy(w, r, current)
 		})))
+		// 兼容带 userId 前缀的媒体分类请求
+		mux.HandleFunc("GET /Users/{userId}/"+current, a.withContext(a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			a.handleLibraryTaxonomy(w, r, current)
+		})))
 	}
 	mux.HandleFunc("GET /Shows/{seriesId}/Seasons", a.withContext(a.requireAuth(a.handleShowsSeasons)))
+	mux.HandleFunc("GET /Users/{userId}/Shows/{seriesId}/Seasons", a.withContext(a.requireAuth(a.handleShowsSeasons))) // 兼容带 userId 的季度列表
 	mux.HandleFunc("GET /Shows/{seriesId}/Episodes", a.withContext(a.requireAuth(a.handleShowsEpisodes)))
+	mux.HandleFunc("GET /Users/{userId}/Shows/{seriesId}/Episodes", a.withContext(a.requireAuth(a.handleShowsEpisodes))) // 兼容带 userId 的单集列表（跨服去重与进度覆盖）
 	mux.HandleFunc("GET /Search/Hints", a.withContext(a.requireAuth(a.handleSearchHints)))
+	mux.HandleFunc("GET /Users/{userId}/Search/Hints", a.withContext(a.requireAuth(a.handleSearchHints))) // 兼容带 userId 的搜索联想提示
 	mux.HandleFunc("GET /Items/{itemId}/Images/{imageType}", a.withContext(a.handleItemImage))
 	mux.HandleFunc("GET /Items/{itemId}/Images/{imageType}/{imageIndex}", a.withContext(a.handleItemImage))
 	mux.HandleFunc("GET /Users/{userId}/Images/{imageType}", a.withContext(a.handleUserImageNotFound))

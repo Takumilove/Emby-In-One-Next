@@ -221,8 +221,18 @@ func (a *App) handleUserItemByID(w http.ResponseWriter, r *http.Request) {
 	instances := a.collectAllowedInstances(reqCtx, resolved)
 	if len(instances) <= 1 {
 		query := cloneValues(r.URL.Query())
-		query.Set("UserId", resolved.Client.clientUserID())
-		payload, err := resolved.Client.RequestJSON(r.Context(), requestContextFrom(r.Context()), a.Identity, http.MethodGet, "/Users/"+resolved.Client.clientUserID()+"/Items/"+resolved.OriginalID, query, nil)
+		path := "/Items/" + resolved.OriginalID
+		if resolved.Client.clientUserID() != "" {
+			path = "/Users/" + resolved.Client.clientUserID() + "/Items/" + resolved.OriginalID
+			query.Set("UserId", resolved.Client.clientUserID())
+		}
+		payload, err := resolved.Client.RequestJSON(r.Context(), requestContextFrom(r.Context()), a.Identity, http.MethodGet, path, query, nil)
+		if err != nil && path != "/Items/"+resolved.OriginalID {
+			// 回退策略：若用户作用域端点失败，尝试通用 /Items/{id}
+			fallbackQ := cloneValues(query)
+			fallbackQ.Del("UserId")
+			payload, err = resolved.Client.RequestJSON(r.Context(), requestContextFrom(r.Context()), a.Identity, http.MethodGet, "/Items/"+resolved.OriginalID, fallbackQ, nil)
+		}
 		if err != nil {
 			writeJSON(w, http.StatusBadGateway, map[string]any{"message": err.Error()})
 			return
@@ -328,24 +338,10 @@ metadataDone:
 	writeJSON(w, http.StatusOK, base)
 }
 
+// handleItemByID 处理通用的 GET /Items/{itemId} 查询。
+// 直接复用 handleUserItemByID 逻辑，以获得完整的多版本片源合并、非管理员上游账号端点回退及本地用户数据覆盖。
 func (a *App) handleItemByID(w http.ResponseWriter, r *http.Request) {
-	resolved := a.resolveRouteID(r.PathValue("itemId"))
-	if resolved == nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Item not found"})
-		return
-	}
-	if !a.requireServerAccess(w, r, resolved) {
-		return
-	}
-	payload, err := resolved.Client.RequestJSON(r.Context(), requestContextFrom(r.Context()), a.Identity, http.MethodGet, "/Items/"+resolved.OriginalID, cloneValues(r.URL.Query()), nil)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]any{"message": err.Error()})
-		return
-	}
-	cfg := a.ConfigStore.Snapshot()
-	rewriteResponseIDs(payload, resolved.ServerID, a.IDStore, cfg.Server.ID, a.clientFacingUserIDFor(r))
-	a.overlayLocalUserData(r, r.PathValue("itemId"), payload)
-	writeJSON(w, http.StatusOK, payload)
+	a.handleUserItemByID(w, r)
 }
 
 func (a *App) handleItemSimilar(w http.ResponseWriter, r *http.Request) {

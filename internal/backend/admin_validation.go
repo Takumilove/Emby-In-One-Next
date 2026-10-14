@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	publicfs "emby-in-one/public"
+	publicfs "emby-in-one-next/public"
 )
 
 func (a *App) adminFileServer() http.Handler {

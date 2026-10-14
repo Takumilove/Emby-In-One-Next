@@ -578,7 +578,7 @@ func (a *App) handleAdminLogsDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Content-Disposition", "attachment; filename=\"emby-in-one.log\"")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(logFile)))
 	http.ServeFile(w, r, logFile)
 }
 

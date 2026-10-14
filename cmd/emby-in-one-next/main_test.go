@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"emby-in-one/internal/backend"
+	"emby-in-one-next/internal/backend"
 )
 
 var configPasswordPattern = regexp.MustCompile(`(?m)^  password: '([^']*(?:''[^']*)*)'$`)

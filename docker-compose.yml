@@ -1,10 +1,10 @@
 services:
-  emby-in-one:
+  emby-in-one-next:
     build:
       context: .
       args:
-        VERSION: v1.4.5
-    container_name: emby-in-one
+        VERSION: v1.0.0
+    container_name: emby-in-one-next
     # 容器以 uid 1000 运行；挂载目录需先 chown 1000:1000（install.sh 会自动处理）：
     #   mkdir -p config data && chown -R 1000:1000 config data
     user: "1000:1000"

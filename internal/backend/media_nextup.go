@@ -165,7 +165,15 @@ func (a *App) fetchNextEpisode(r *http.Request, reqCtx *RequestContext, client *
 	q.Set("SortBy", "SortName")
 	q.Set("SortOrder", "Ascending")
 
-	payload, err := client.RequestJSON(r.Context(), reqCtx, a.Identity, http.MethodGet, "/Shows/"+seriesOriginalID+"/Episodes", q, nil)
+	epPath := "/Shows/" + seriesOriginalID + "/Episodes"
+	if client.clientUserID() != "" {
+		epPath = "/Users/" + client.clientUserID() + "/Shows/" + seriesOriginalID + "/Episodes"
+	}
+	payload, err := client.RequestJSON(r.Context(), reqCtx, a.Identity, http.MethodGet, epPath, q, nil)
+	if err != nil && epPath != "/Shows/"+seriesOriginalID+"/Episodes" {
+		// 回退策略：尝试无用户前缀的 /Shows/{id}/Episodes
+		payload, err = client.RequestJSON(r.Context(), reqCtx, a.Identity, http.MethodGet, "/Shows/"+seriesOriginalID+"/Episodes", q, nil)
+	}
 	if err != nil {
 		return nil
 	}
@@ -220,7 +228,15 @@ func (a *App) fetchNextEpisode(r *http.Request, reqCtx *RequestContext, client *
 		q2.Set("SortOrder", "Ascending")
 		q2.Set("Limit", "1")
 
-		payload2, err2 := client.RequestJSON(r.Context(), reqCtx, a.Identity, http.MethodGet, "/Shows/"+seriesOriginalID+"/Episodes", q2, nil)
+		epPath2 := "/Shows/" + seriesOriginalID + "/Episodes"
+		if client.clientUserID() != "" {
+			epPath2 = "/Users/" + client.clientUserID() + "/Shows/" + seriesOriginalID + "/Episodes"
+		}
+		payload2, err2 := client.RequestJSON(r.Context(), reqCtx, a.Identity, http.MethodGet, epPath2, q2, nil)
+		if err2 != nil && epPath2 != "/Shows/"+seriesOriginalID+"/Episodes" {
+			// 回退策略：尝试无用户前缀的 /Shows/{id}/Episodes
+			payload2, err2 = client.RequestJSON(r.Context(), reqCtx, a.Identity, http.MethodGet, "/Shows/"+seriesOriginalID+"/Episodes", q2, nil)
+		}
 		if err2 == nil {
 			items2 := asItems(payload2)
 			if len(items2) > 0 {

@@ -7,9 +7,15 @@ set -e
 # ╚════════════════════════════════════════════════════╝
 
 GITHUB_REPO="Takumilove/Emby-In-One-Next"
-PROJECT_DIR="/opt/emby-in-one"
-SERVICE_NAME="emby-in-one"
+PROJECT_DIR="/opt/emby-in-one-next"
+SERVICE_NAME="emby-in-one-next"
 DEFAULT_PORT=8096
+
+# 平滑迁移：若存在旧版 /opt/emby-in-one 且尚未创建新目录，自动复制已有配置与数据
+if [[ ! -d "${PROJECT_DIR}" && -d "/opt/emby-in-one" ]]; then
+  echo -e "\033[0;32m[信息]\033[0m 检测到旧版目录 /opt/emby-in-one，正在平滑迁移至 ${PROJECT_DIR}..."
+  cp -r /opt/emby-in-one "${PROJECT_DIR}"
+fi
 
 # ── 颜色 ──
 RED='\033[0;31m'
@@ -80,8 +86,8 @@ version_lte() {
 
 # ── 校验和验证 ──
 # 发布流程必须为每个产物生成同名的 .sha256 文件，例如:
-#   sha256sum Emby-In-One-linux-amd64-v1.4.5 > Emby-In-One-linux-amd64-v1.4.5.sha256
-#   sha256sum admin.html admin.js emby-in-one-cli.sh > <各自同名>.sha256
+#   sha256sum Emby-In-One-Next-linux-amd64-v1.0.0 > Emby-In-One-Next-linux-amd64-v1.0.0.sha256
+#   sha256sum admin.html admin.js emby-in-one-next-cli.sh > <各自同名>.sha256
 verify_sha256() {
   local file="$1" url="$2"
   # V1.4.3 及更早的 Release 未附带 .sha256 产物，无从校验；默认跳过保证一键安装可用
@@ -161,7 +167,7 @@ if [[ "$FILE_VERSION" =~ ^V(.*) ]]; then
 fi
 
 # 根据 build 目录里的命名规范构建二进制文件名
-BINARY_NAME="Emby-In-One-linux-${ARCH}-${FILE_VERSION}"
+BINARY_NAME="Emby-In-One-Next-linux-${ARCH}-${FILE_VERSION}"
 DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/${BINARY_NAME}"
 
 # ── 旧版 Release 无校验和产物 ──
@@ -175,7 +181,7 @@ fi
 
 # ── 升级检测 ──
 # 目录已存在即视为已有安装: Docker 部署（或上次安装失败残留）的目录里没有
-# emby-in-one 二进制，只按二进制判断会把它们误判为全新安装，
+# emby-in-one-next 二进制，只按二进制判断会把它们误判为全新安装，
 # 回滚时整目录删除，用户的 config/data 一并丢失。
 IS_UPGRADE=false
 _DIR_PREEXISTED=false
@@ -202,11 +208,11 @@ cleanup() {
   rm -f /tmp/emby-in-one-install-$$* 2>/dev/null || true
   if [[ "$IS_UPGRADE" == true ]]; then
     # 已有安装: 只恢复本次动过的文件，绝不删除 config/data/log
-    if [[ -f "${PROJECT_DIR}/emby-in-one.bak" ]]; then
-      mv -f "${PROJECT_DIR}/emby-in-one.bak" "${PROJECT_DIR}/emby-in-one"
+    if [[ -f "${PROJECT_DIR}/emby-in-one-next.bak" ]]; then
+      mv -f "${PROJECT_DIR}/emby-in-one-next.bak" "${PROJECT_DIR}/emby-in-one-next"
       info "已恢复旧版本二进制"
     elif [[ "$_BINARY_INSTALLED" == true ]]; then
-      rm -f "${PROJECT_DIR}/emby-in-one"
+      rm -f "${PROJECT_DIR}/emby-in-one-next"
       info "已移除本次写入的二进制"
     fi
   else
@@ -273,17 +279,20 @@ if [[ "$IS_UPGRADE" == true ]]; then
     _SERVICE_WAS_RUNNING=true
   fi
   # 已有安装目录里可能没有二进制（例如原先是 Docker 部署）
-  if [[ -f "${PROJECT_DIR}/emby-in-one" ]]; then
-    cp "${PROJECT_DIR}/emby-in-one" "${PROJECT_DIR}/emby-in-one.bak"
+  if [[ -f "${PROJECT_DIR}/emby-in-one-next" ]]; then
+    cp "${PROJECT_DIR}/emby-in-one-next" "${PROJECT_DIR}/emby-in-one-next.bak"
     info "已备份旧版可执行文件"
+  elif [[ -f "${PROJECT_DIR}/emby-in-one" ]]; then
+    cp "${PROJECT_DIR}/emby-in-one" "${PROJECT_DIR}/emby-in-one-next.bak"
+    info "已备份旧版可执行文件为 emby-in-one-next.bak"
   fi
 fi
 
 # ── 安装二进制 ──
-mv "${TMP_FILE}" "${PROJECT_DIR}/emby-in-one"
-chmod +x "${PROJECT_DIR}/emby-in-one"
+mv "${TMP_FILE}" "${PROJECT_DIR}/emby-in-one-next"
+chmod +x "${PROJECT_DIR}/emby-in-one-next"
 _BINARY_INSTALLED=true
-info "二进制文件已成功安装到 ${PROJECT_DIR}/emby-in-one"
+info "二进制文件已成功安装到 ${PROJECT_DIR}/emby-in-one-next"
 
 # ── 生成默认配置（仅首次安装） ──
 if [[ ! -f "${PROJECT_DIR}/config/config.yaml" ]]; then
@@ -291,7 +300,7 @@ if [[ ! -f "${PROJECT_DIR}/config/config.yaml" ]]; then
   cat > "${PROJECT_DIR}/config/config.yaml" << EOF
 server:
   port: ${DEFAULT_PORT}
-  name: "Emby-In-One"
+  name: "Emby-In-One-Next"
 
 admin:
   username: "admin"
@@ -334,22 +343,24 @@ done
 
 # ── 安装 SSH 管理脚本 ──
 install_cli_script() {
-  chmod +x "${PROJECT_DIR}/emby-in-one-cli.sh"
-  cp "${PROJECT_DIR}/emby-in-one-cli.sh" /usr/local/bin/emby-in-one
-  chmod +x /usr/local/bin/emby-in-one
+  chmod +x "${PROJECT_DIR}/emby-in-one-next-cli.sh"
+  cp -f "${PROJECT_DIR}/emby-in-one-next-cli.sh" /usr/local/bin/emby-in-one-next
+  chmod +x /usr/local/bin/emby-in-one-next
+  # 建立兼容快捷方式，老命令 emby-in-one 同样可用
+  ln -sf /usr/local/bin/emby-in-one-next /usr/local/bin/emby-in-one
 }
 
-CLI_URL="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/emby-in-one-cli.sh"
-if download_verified "${CLI_URL}" "${PROJECT_DIR}/emby-in-one-cli.sh" -s; then
+CLI_URL="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/emby-in-one-next-cli.sh"
+if download_verified "${CLI_URL}" "${PROJECT_DIR}/emby-in-one-next-cli.sh" -s; then
   install_cli_script
-  info "SSH 管理菜单已安装 (使用 'emby-in-one' 命令即可呼出)"
+  info "SSH 管理菜单已安装 (输入 'emby-in-one-next' 或 'emby-in-one' 即可呼出)"
 else
   # 同样不做无校验的 main 分支回退（该脚本之后会以 root 身份被执行）。
   # download_verified 失败不会破坏磁盘上已有的副本；升级场景下保留旧版并继续安装，
   # 全新安装则留待手动补充。
-  if [[ -f "${PROJECT_DIR}/emby-in-one-cli.sh" ]]; then
+  if [[ -f "${PROJECT_DIR}/emby-in-one-next-cli.sh" ]]; then
     install_cli_script
-    warn "未在 Release ${RELEASE_TAG} 中找到 emby-in-one-cli.sh，保留磁盘上已有的副本"
+    warn "未在 Release ${RELEASE_TAG} 中找到 emby-in-one-next-cli.sh，保留磁盘上已有的副本"
   else
     warn "SSH 管理脚本拉取失败。之后可手动补充。"
   fi
@@ -404,7 +415,7 @@ if command -v systemctl &>/dev/null; then
   fi
   cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
-Description=Emby In One Aggregator
+Description=Emby In One Next Aggregator
 After=network-online.target
 Wants=network-online.target
 
@@ -412,7 +423,7 @@ Wants=network-online.target
 Type=simple
 User=${SERVICE_USER}
 WorkingDirectory=${PROJECT_DIR}
-ExecStart=${PROJECT_DIR}/emby-in-one
+ExecStart=${PROJECT_DIR}/emby-in-one-next
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536
@@ -446,10 +457,10 @@ else
   cd "${PROJECT_DIR}"
   # 非 systemd 环境同样尽量降权运行
   if command -v runuser &>/dev/null; then
-    nohup runuser -u "${SERVICE_USER}" -- ./emby-in-one > "${PROJECT_DIR}/log/stdout.log" 2>&1 &
+    nohup runuser -u "${SERVICE_USER}" -- ./emby-in-one-next > "${PROJECT_DIR}/log/stdout.log" 2>&1 &
     info "服务已在后台以 ${SERVICE_USER} 身份启动 (PID: $!)"
   else
-    nohup ./emby-in-one > "${PROJECT_DIR}/log/stdout.log" 2>&1 &
+    nohup ./emby-in-one-next > "${PROJECT_DIR}/log/stdout.log" 2>&1 &
     warn "未找到 runuser，服务以 root 身份在后台启动"
     info "服务已在后台启动 (PID: $!)"
   fi
@@ -505,7 +516,7 @@ fi
 
 echo ""
 echo -e "  ${DIM}------------------- 日常用法备忘 -------------------${NC}"
-echo -e "  ${DIM}1. 呼出管理菜单并重置密码: ${BOLD}emby-in-one${NC}"
+echo -e "  ${DIM}1. 呼出管理菜单并重置密码: ${BOLD}emby-in-one-next${NC} (或 emby-in-one)"
 echo -e "  ${DIM}2. 查看引擎实时运行情况:   journalctl -u ${SERVICE_NAME} -f${NC}"
 echo -e "  ${DIM}3. 重启/启停聚合代理服务:  systemctl {start|stop|restart} ${SERVICE_NAME}${NC}"
 echo ""

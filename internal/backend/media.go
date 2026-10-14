@@ -33,14 +33,19 @@ func (a *App) registerMediaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /Users/{userId}/Items/Resume", a.withContext(a.requireAuth(a.handleUserItemsResume)))
 	mux.HandleFunc("GET /Items/Resume", a.withContext(a.requireAuth(a.handleUserItemsResume)))
 	mux.HandleFunc("GET /Users/{userId}/Items/Latest", a.withContext(a.requireAuth(a.handleUserItemsLatest)))
+	mux.HandleFunc("GET /Items/Latest", a.withContext(a.requireAuth(a.handleUserItemsLatest))) // 兼容无 userId 的最新项目查询
 	mux.HandleFunc("GET /Users/{userId}/Items/{itemId}", a.withContext(a.requireAuth(a.handleUserItemByID)))
 	mux.HandleFunc("GET /Items/{itemId}", a.withContext(a.requireAuth(a.handleItemByID)))
 	mux.HandleFunc("GET /Items/{itemId}/Similar", a.withContext(a.requireAuth(a.handleItemSimilar)))
+	mux.HandleFunc("GET /Users/{userId}/Items/{itemId}/Similar", a.withContext(a.requireAuth(a.handleItemSimilar))) // 兼容用户作用域相似推荐
 	mux.HandleFunc("GET /Items/{itemId}/ThemeMedia", a.withContext(a.requireAuth(a.handleItemThemeMedia)))
+	mux.HandleFunc("GET /Users/{userId}/Items/{itemId}/ThemeMedia", a.withContext(a.requireAuth(a.handleItemThemeMedia))) // 兼容用户作用域主题媒体
 	mux.HandleFunc("GET /Shows/NextUp", a.withContext(a.requireAuth(a.handleShowsNextUp)))
 	mux.HandleFunc("GET /Users/{userId}/Shows/NextUp", a.withContext(a.requireAuth(a.handleShowsNextUp)))
 	mux.HandleFunc("GET /Items/{itemId}/PlaybackInfo", a.withContext(a.requireAuth(a.handlePlaybackInfo)))
 	mux.HandleFunc("POST /Items/{itemId}/PlaybackInfo", a.withContext(a.requireAuth(a.handlePlaybackInfo)))
+	mux.HandleFunc("GET /Users/{userId}/Items/{itemId}/PlaybackInfo", a.withContext(a.requireAuth(a.handlePlaybackInfo))) // 兼容用户作用域播放信息查询
+	mux.HandleFunc("POST /Users/{userId}/Items/{itemId}/PlaybackInfo", a.withContext(a.requireAuth(a.handlePlaybackInfo))) // 兼容用户作用域播放信息提交
 	mux.HandleFunc("GET /Videos/{itemId}/{rest...}", a.withContext(a.requireAuth(a.handleVideoProxy)))
 	mux.HandleFunc("GET /Audio/{itemId}/{rest...}", a.withContext(a.requireAuth(a.handleAudioProxy)))
 	mux.HandleFunc("DELETE /Videos/ActiveEncodings", a.withContext(a.requireAuth(a.handleDeleteActiveEncodings)))

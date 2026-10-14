@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 
 # ╔══════════════════════════════════════╗
-# ║   Emby In One Next 管理菜单 V1.4.5   ║
+# ║   Emby In One Next 管理菜单 V1.0.0   ║
 # ╚══════════════════════════════════════╝
 
-PROJECT_DIR="/opt/emby-in-one"
-VERSION="1.4.5"
-SERVICE_NAME="emby-in-one"
+PROJECT_DIR="/opt/emby-in-one-next"
+if [[ ! -d "${PROJECT_DIR}" && -d "/opt/emby-in-one" ]]; then
+  PROJECT_DIR="/opt/emby-in-one"
+fi
+VERSION="1.0.0"
+SERVICE_NAME="emby-in-one-next"
+if ! systemctl list-unit-files --type=service 2>/dev/null | grep -q "^${SERVICE_NAME}\.service"; then
+  if systemctl list-unit-files --type=service 2>/dev/null | grep -q "^emby-in-one\.service"; then
+    SERVICE_NAME="emby-in-one"
+  fi
+fi
 GITHUB_REPO="Takumilove/Emby-In-One-Next"
 
 # ── 颜色 ──
@@ -24,7 +32,7 @@ NC='\033[0m'
 # binary 模式要操作 systemd 并读取 0600 的 config.yaml；docker 模式下
 # docker 组成员能借 --reset-password 重置管理员密码（提权），因此一律要求 root。
 if [[ "$EUID" -ne 0 ]]; then
-  echo -e "${RED}[错误] 请使用 root 权限运行管理菜单 (sudo emby-in-one)${NC}"
+  echo -e "${RED}[错误] 请使用 root 权限运行管理菜单 (sudo emby-in-one-next 或 sudo emby-in-one)${NC}"
   exit 1
 fi
 
@@ -32,7 +40,7 @@ fi
 detect_deploy_mode() {
   # 注意: systemctl list-unit-files <unit> 在没有匹配项时同样返回 0，
   # 必须自己匹配输出，否则没有 systemd 服务的 Docker 部署会被误判为 binary。
-  if [[ -x "${PROJECT_DIR}/emby-in-one" ]] \
+  if { [[ -x "${PROJECT_DIR}/emby-in-one-next" ]] || [[ -x "${PROJECT_DIR}/emby-in-one" ]]; } \
     && systemctl list-unit-files --type=service 2>/dev/null | grep -q "^${SERVICE_NAME}\.service"; then
     echo "binary"
   else
@@ -101,14 +109,18 @@ get_admin_token() {
 # 用于按 tag 拉取脚本（不再跟随 main 分支）。
 running_version_tag() {
   local v=""
-  if [[ "$DEPLOY_MODE" == "binary" && -x "${PROJECT_DIR}/emby-in-one" ]]; then
-    v=$("${PROJECT_DIR}/emby-in-one" --version 2>/dev/null | head -1 | tr -d '[:space:]')
+  if [[ "$DEPLOY_MODE" == "binary" ]]; then
+    if [[ -x "${PROJECT_DIR}/emby-in-one-next" ]]; then
+      v=$("${PROJECT_DIR}/emby-in-one-next" --version 2>/dev/null | head -1 | tr -d '[:space:]')
+    elif [[ -x "${PROJECT_DIR}/emby-in-one" ]]; then
+      v=$("${PROJECT_DIR}/emby-in-one" --version 2>/dev/null | head -1 | tr -d '[:space:]')
+    fi
   fi
   if [[ -z "$v" || "$v" == "dev" ]]; then
     v="${VERSION}"
   fi
   # GitHub Release 的 tag 惯例为大写 V 开头（见 release-install.sh 的大小写处理）。
-  # 两步前缀处理同时兼容 v1.4.4 / V1.4.4 / 1.4.4 三种输入，避免拼出 VV 前缀。
+  # 两步前缀处理同时兼容 v1.0.0 / V1.0.0 / 1.0.0 三种输入，避免拼出 VV 前缀。
   v="V${v#v}"; v="V${v#V}"
   echo "${v}"
 }
@@ -131,12 +143,21 @@ reset_password_via_cli() {
   # 注意: CLI 默认会探测本机配置端口上是否已有实例在跑并拒绝重置，
   # 因此调用方必须先停服务（见 do_change_password）。
   if [[ "$DEPLOY_MODE" == "binary" ]]; then
-    ( cd "${PROJECT_DIR}" && printf '%s' "$new_password" | ./emby-in-one --reset-password - )
-  elif docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'emby-in-one'; then
-    printf '%s' "$new_password" | docker exec -i emby-in-one /app/emby-in-one --reset-password -
+    local bin_cmd="./emby-in-one-next"
+    [[ ! -x "${PROJECT_DIR}/emby-in-one-next" && -x "${PROJECT_DIR}/emby-in-one" ]] && bin_cmd="./emby-in-one"
+    ( cd "${PROJECT_DIR}" && printf '%s' "$new_password" | "$bin_cmd" --reset-password - )
+  elif docker ps --format '{{.Names}}' 2>/dev/null | grep -qE '^emby-in-one(-next)?$'; then
+    local container_name="emby-in-one-next"
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'emby-in-one' && container_name="emby-in-one"
+    local bin_in_c="/app/emby-in-one-next"
+    docker exec "$container_name" test -x /app/emby-in-one 2>/dev/null && bin_in_c="/app/emby-in-one"
+    printf '%s' "$new_password" | docker exec -i "$container_name" "$bin_in_c" --reset-password -
   else
     # -T: stdin 是管道而非 TTY，必须关掉 TTY 分配
-    ( cd "${PROJECT_DIR}" && printf '%s' "$new_password" | compose_cmd run --rm --no-deps -T emby-in-one /app/emby-in-one --reset-password - )
+    local c_service="emby-in-one-next"
+    grep -q "emby-in-one:" "${PROJECT_DIR}/docker-compose.yml" 2>/dev/null && c_service="emby-in-one"
+    ( cd "${PROJECT_DIR}" && printf '%s' "$new_password" | compose_cmd run --rm --no-deps -T "$c_service" /app/emby-in-one-next --reset-password - 2>/dev/null || \
+      compose_cmd run --rm --no-deps -T "$c_service" /app/emby-in-one --reset-password - )
   fi
 }
 
@@ -263,7 +284,7 @@ do_update() {
     else
       # 2) 其次按当前运行版本的 tag 拉取，不再跟随 main 分支
       tag=$(running_version_tag)
-      tmp_script="/tmp/emby-in-one-release-install-$$.sh"
+      tmp_script="/tmp/emby-in-one-next-release-install-$$.sh"
       echo -e "  ${DIM}从 Release ${tag} 获取更新脚本...${NC}"
       if ! curl -fsSL --max-time 30 -o "${tmp_script}" \
         "https://github.com/${GITHUB_REPO}/releases/download/${tag}/release-install.sh"; then
@@ -416,7 +437,7 @@ download_and_install_docker() {
   local release_tag="V${version_tag#v}"
   release_tag="V${release_tag#V}"
   local file_version="v${release_tag#V}"
-  local archive_name="Emby-In-One-docker-${file_version}.tar.gz"
+  local archive_name="Emby-In-One-Next-docker-${file_version}.tar.gz"
   local download_url="https://github.com/${GITHUB_REPO}/releases/download/${release_tag}/${archive_name}"
 
   echo ""
@@ -446,7 +467,9 @@ download_and_install_docker() {
 
   # 定位源码根目录
   local src_dir=""
-  if [[ -d "${tmp_dir}/emby-in-one/cmd" && -f "${tmp_dir}/emby-in-one/go.mod" ]]; then
+  if [[ -d "${tmp_dir}/emby-in-one-next/cmd" && -f "${tmp_dir}/emby-in-one-next/go.mod" ]]; then
+    src_dir="${tmp_dir}/emby-in-one-next"
+  elif [[ -d "${tmp_dir}/emby-in-one/cmd" && -f "${tmp_dir}/emby-in-one/go.mod" ]]; then
     src_dir="${tmp_dir}/emby-in-one"
   elif [[ -d "${tmp_dir}/cmd" && -f "${tmp_dir}/go.mod" ]]; then
     src_dir="${tmp_dir}"
@@ -466,7 +489,7 @@ download_and_install_docker() {
       cp -r "${src_dir}/${item}" "${PROJECT_DIR}/"
     fi
   done
-  for item in emby-in-one-cli.sh .dockerignore; do
+  for item in emby-in-one-next-cli.sh emby-in-one-cli.sh .dockerignore; do
     if [[ -e "${src_dir}/${item}" ]]; then
       cp -f "${src_dir}/${item}" "${PROJECT_DIR}/"
     fi
@@ -486,33 +509,33 @@ COPY third_party ./third_party
 COPY cmd ./cmd
 COPY internal ./internal
 COPY public ./public
-RUN CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=${VERSION}" -o /out/emby-in-one ./cmd/emby-in-one
+RUN CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=${VERSION}" -o /out/emby-in-one-next ./cmd/emby-in-one-next
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata wget && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 RUN mkdir -p /app/config /app/data /app/public
 COPY public ./public
-COPY --from=builder /out/emby-in-one ./emby-in-one
+COPY --from=builder /out/emby-in-one-next ./emby-in-one-next
 # 非 root 运行 (uid 1000，与 docker-compose.yml 的 user 一致)
 RUN useradd -r -u 1000 -U -s /usr/sbin/nologin eio && chown -R eio:eio /app
 USER eio
 EXPOSE 8096
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8096/System/Info/Public || exit 1
-CMD ["./emby-in-one"]
+CMD ["./emby-in-one-next"]
 DEOF
   fi
 
   # 生成 docker-compose.yml（注入目标版本号）
   cat > "${PROJECT_DIR}/docker-compose.yml" <<EOF
 services:
-  emby-in-one:
+  emby-in-one-next:
     build:
       context: .
       args:
         VERSION: ${version_tag}
-    container_name: emby-in-one
+    container_name: emby-in-one-next
     # 容器以 uid 1000 运行，挂载目录需先 chown 1000:1000
     user: "1000:1000"
     ports:
@@ -539,12 +562,19 @@ EOF
   cd "${PROJECT_DIR}" && compose_cmd build --no-cache || { echo -e "${RED}✘ 构建镜像失败${NC}"; return 1; }
   compose_cmd up -d || { echo -e "${RED}✘ 启动容器失败${NC}"; return 1; }
 
-  # 安全替换 CLI 脚本（原子操作）
-  if [[ -f "${PROJECT_DIR}/emby-in-one-cli.sh" ]]; then
-    local tmp_cli="/usr/local/bin/emby-in-one.tmp.$$"
-    cp -f "${PROJECT_DIR}/emby-in-one-cli.sh" "${tmp_cli}"
-    mv -f "${tmp_cli}" /usr/local/bin/emby-in-one
-    chmod +x /usr/local/bin/emby-in-one
+  # 安全替换 CLI 脚本（原子操作，同时更新 emby-in-one-next 与 emby-in-one 快捷指令）
+  local cli_src=""
+  if [[ -f "${PROJECT_DIR}/emby-in-one-next-cli.sh" ]]; then
+    cli_src="${PROJECT_DIR}/emby-in-one-next-cli.sh"
+  elif [[ -f "${PROJECT_DIR}/emby-in-one-cli.sh" ]]; then
+    cli_src="${PROJECT_DIR}/emby-in-one-cli.sh"
+  fi
+  if [[ -n "$cli_src" ]]; then
+    local tmp_cli="/usr/local/bin/emby-in-one-next.tmp.$$"
+    cp -f "${cli_src}" "${tmp_cli}"
+    mv -f "${tmp_cli}" /usr/local/bin/emby-in-one-next
+    chmod +x /usr/local/bin/emby-in-one-next
+    ln -sf /usr/local/bin/emby-in-one-next /usr/local/bin/emby-in-one
   fi
 
   echo ""
@@ -558,13 +588,13 @@ download_and_install_binary() {
   local release_tag="V${version_tag#v}"
   release_tag="V${release_tag#V}"
   local file_version="v${release_tag#V}"
-  local binary_name="Emby-In-One-linux-${arch}-${file_version}"
+  local binary_name="Emby-In-One-Next-linux-${arch}-${file_version}"
   local download_url="https://github.com/${GITHUB_REPO}/releases/download/${release_tag}/${binary_name}"
 
   echo ""
   echo -e "${CYAN}▶ 正在下载 ${binary_name}...${NC}"
 
-  local tmp_file="/tmp/emby-in-one-update-$$"
+  local tmp_file="/tmp/emby-in-one-next-update-$$"
   if ! curl -fSL --max-time 120 --progress-bar -o "${tmp_file}" "${download_url}" 2>&1; then
     rm -f "${tmp_file}"
     echo -e "${RED}[错误] 下载失败，请检查版本号 ${version_tag} 是否存在${NC}"
@@ -579,29 +609,39 @@ download_and_install_binary() {
 
   # 停止当前服务
   local was_running=false
-  if systemctl is-active --quiet emby-in-one 2>/dev/null; then
+  if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
     was_running=true
     echo -e "${YELLOW}▶ 正在停止服务...${NC}"
-    systemctl stop emby-in-one
+    systemctl stop "${SERVICE_NAME}"
   fi
 
   # 备份旧二进制
-  if [[ -f "${PROJECT_DIR}/emby-in-one" ]]; then
-    cp "${PROJECT_DIR}/emby-in-one" "${PROJECT_DIR}/emby-in-one.bak"
-    echo -e "${DIM}  已备份旧版本到 emby-in-one.bak${NC}"
+  if [[ -f "${PROJECT_DIR}/emby-in-one-next" ]]; then
+    cp "${PROJECT_DIR}/emby-in-one-next" "${PROJECT_DIR}/emby-in-one-next.bak"
+    echo -e "${DIM}  已备份旧版本到 emby-in-one-next.bak${NC}"
+  elif [[ -f "${PROJECT_DIR}/emby-in-one" ]]; then
+    cp "${PROJECT_DIR}/emby-in-one" "${PROJECT_DIR}/emby-in-one-next.bak"
+    echo -e "${DIM}  已备份旧版本到 emby-in-one-next.bak${NC}"
   fi
 
   # 安装新二进制
-  mv "${tmp_file}" "${PROJECT_DIR}/emby-in-one"
-  chmod +x "${PROJECT_DIR}/emby-in-one"
+  mv "${tmp_file}" "${PROJECT_DIR}/emby-in-one-next"
+  chmod +x "${PROJECT_DIR}/emby-in-one-next"
   echo -e "${GREEN}✔ 二进制文件已更新${NC}"
 
   # 更新 CLI 脚本（安全原子替换，避免覆盖运行中脚本）
-  if [[ -f "${PROJECT_DIR}/emby-in-one-cli.sh" ]]; then
-    local tmp_cli="/usr/local/bin/emby-in-one.tmp.$$"
-    cp -f "${PROJECT_DIR}/emby-in-one-cli.sh" "${tmp_cli}" 2>/dev/null || true
-    mv -f "${tmp_cli}" /usr/local/bin/emby-in-one 2>/dev/null || true
-    chmod +x /usr/local/bin/emby-in-one 2>/dev/null || true
+  local cli_src=""
+  if [[ -f "${PROJECT_DIR}/emby-in-one-next-cli.sh" ]]; then
+    cli_src="${PROJECT_DIR}/emby-in-one-next-cli.sh"
+  elif [[ -f "${PROJECT_DIR}/emby-in-one-cli.sh" ]]; then
+    cli_src="${PROJECT_DIR}/emby-in-one-cli.sh"
+  fi
+  if [[ -n "$cli_src" ]]; then
+    local tmp_cli="/usr/local/bin/emby-in-one-next.tmp.$$"
+    cp -f "${cli_src}" "${tmp_cli}" 2>/dev/null || true
+    mv -f "${tmp_cli}" /usr/local/bin/emby-in-one-next 2>/dev/null || true
+    chmod +x /usr/local/bin/emby-in-one-next 2>/dev/null || true
+    ln -sf /usr/local/bin/emby-in-one-next /usr/local/bin/emby-in-one 2>/dev/null || true
   fi
 
   # 更新管理面板前端文件
@@ -639,7 +679,7 @@ download_and_install_binary() {
 
   echo ""
   echo -e "${GREEN}✔ 更新完成！版本: ${version_tag}${NC}"
-  echo -e "${DIM}  如需回滚，将 emby-in-one.bak 改名为 emby-in-one 并重启${NC}"
+  echo -e "${DIM}  如需回滚，将 emby-in-one-next.bak 改名为 emby-in-one-next 并重启${NC}"
 }
 
 do_status() {
@@ -886,10 +926,14 @@ do_change_password() {
     echo ""
     echo -e "${RED}✘ 密码重置失败${NC}"
     if [[ "$DEPLOY_MODE" == "binary" ]]; then
-      echo -e "${DIM}  若因服务仍在运行而失败，可停服后加 --force 重试: ./emby-in-one --reset-password - --force${NC}"
+      local bin_cmd="./emby-in-one-next"
+      [[ ! -x "${PROJECT_DIR}/emby-in-one-next" && -x "${PROJECT_DIR}/emby-in-one" ]] && bin_cmd="./emby-in-one"
+      echo -e "${DIM}  若因服务仍在运行而失败，可停服后加 --force 重试: ${bin_cmd} --reset-password - --force${NC}"
     else
+      local c_service="emby-in-one-next"
+      grep -q "emby-in-one:" "${PROJECT_DIR}/docker-compose.yml" 2>/dev/null && c_service="emby-in-one"
       echo -e "${DIM}  若因服务仍在运行而失败，可手动执行 (服务需先停):${NC}"
-      echo -e "${DIM}  docker compose -f ${PROJECT_DIR}/docker-compose.yml run --rm -T emby-in-one /app/emby-in-one --reset-password - --force${NC}"
+      echo -e "${DIM}  docker compose -f ${PROJECT_DIR}/docker-compose.yml run --rm -T ${c_service} /app/emby-in-one-next --reset-password - --force${NC}"
     fi
   fi
   # 无论成败都还原属主: 旧版二进制以 root 重写 config/tokens 后不会自己恢复属主，
@@ -921,7 +965,7 @@ do_user_list() {
   if [[ "$DEPLOY_MODE" == "binary" ]]; then
     systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null && service_running=true
   else
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'emby-in-one' && service_running=true
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -qE '^emby-in-one(-next)?$' && service_running=true
   fi
   if [[ "$service_running" != true ]]; then
     echo -e "${RED}[错误] 服务未运行，请先启动服务${NC}"
@@ -950,7 +994,7 @@ do_user_add() {
   if [[ "$DEPLOY_MODE" == "binary" ]]; then
     systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null && service_running=true
   else
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'emby-in-one' && service_running=true
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -qE '^emby-in-one(-next)?$' && service_running=true
   fi
   if [[ "$service_running" != true ]]; then
     echo -e "${RED}[错误] 服务未运行，请先启动服务${NC}"
@@ -1002,7 +1046,7 @@ do_user_delete() {
   if [[ "$DEPLOY_MODE" == "binary" ]]; then
     systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null && service_running=true
   else
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'emby-in-one' && service_running=true
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -qE '^emby-in-one(-next)?$' && service_running=true
   fi
   if [[ "$service_running" != true ]]; then
     echo -e "${RED}[错误] 服务未运行，请先启动服务${NC}"
@@ -1102,8 +1146,9 @@ do_uninstall() {
   fi
 
   echo -e "${YELLOW}▶ 正在删除 CLI 工具...${NC}"
-  rm -f /usr/local/bin/emby-in-one
-  hash -d emby-in-one 2>/dev/null
+  rm -f /usr/local/bin/emby-in-one-next /usr/local/bin/emby-in-one
+  hash -d emby-in-one-next 2>/dev/null || true
+  hash -d emby-in-one 2>/dev/null || true
 
   echo ""
   echo -e "${GREEN}✔ 卸载完成${NC}"
@@ -1111,7 +1156,7 @@ do_uninstall() {
     echo -e "${DIM}  配置和数据已保留在 ${PROJECT_DIR}/config、${PROJECT_DIR}/data 和 ${PROJECT_DIR}/log${NC}"
   fi
   echo ""
-  echo -e "${DIM}  提示: 如果当前 shell 仍能找到 emby-in-one 命令，请执行 hash -r 或重新打开终端${NC}"
+  echo -e "${DIM}  提示: 如果当前 shell 仍能找到 emby-in-one-next 或 emby-in-one 命令，请执行 hash -r 或重新打开终端${NC}"
   echo ""
   exit 0
 }
@@ -1120,7 +1165,7 @@ do_uninstall() {
 show_menu() {
   echo ""
   echo -e "${BOLD}${BLUE}  ┌──────────────────────────────────────┐${NC}"
-  echo -e "${BOLD}${BLUE}  │     Emby In One 管理菜单  ${DIM}v${VERSION}${NC}${BOLD}${BLUE}     │${NC}"
+  echo -e "${BOLD}${BLUE}  │   Emby In One Next 管理菜单 ${DIM}v${VERSION}${NC}${BOLD}${BLUE}   │${NC}"
   echo -e "${BOLD}${BLUE}  └──────────────────────────────────────┘${NC}"
   echo ""
   echo -e "  ${BOLD}服务管理${NC}"
@@ -1139,7 +1184,7 @@ show_menu() {
   echo -e "   ${MAGENTA}14${NC}) 删除普通用户"
   echo ""
   echo -e "  ${BOLD}系统维护${NC}"
-  echo -e "   ${YELLOW}10${NC}) 查看日志         ${RED}11${NC}) 卸载 Emby In One"
+  echo -e "   ${YELLOW}10${NC}) 查看日志         ${RED}11${NC}) 卸载 Emby In One Next"
   echo -e "   ${CYAN}15${NC}) 下载指定版本"
   echo ""
   echo -e "    ${DIM}0${NC}) 退出"
@@ -1149,7 +1194,7 @@ show_menu() {
 # ── 检查项目目录 ──
 if [[ ! -d "${PROJECT_DIR}" ]]; then
   echo -e "${RED}[错误] 项目目录 ${PROJECT_DIR} 不存在${NC}"
-  echo -e "${YELLOW}请先运行 install.sh 安装 Emby In One${NC}"
+  echo -e "${YELLOW}请先运行 install.sh 安装 Emby In One Next${NC}"
   exit 1
 fi
 

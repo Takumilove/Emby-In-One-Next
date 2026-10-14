@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"emby-in-one/internal/backend"
+	"emby-in-one-next/internal/backend"
 )
 
 // Version is set at build time via -ldflags "-X main.Version=..."
@@ -99,7 +99,7 @@ func ensureServiceStopped(cfg backend.Config, force bool) error {
 		return nil // nothing listening on the configured port
 	}
 	_ = conn.Close()
-	return fmt.Errorf("emby-in-one is still running on %s; stop it first (systemctl stop emby-in-one) or pass --force", address)
+	return fmt.Errorf("emby-in-one-next is still running on %s; stop it first (systemctl stop emby-in-one-next) or pass --force", address)
 }
 
 func resetPassword(newPassword string, force bool, stdout io.Writer) error {

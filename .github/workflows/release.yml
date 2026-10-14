@@ -1,14 +1,14 @@
 name: Release
 
-# 推送大写 V 开头的版本 tag（如 V1.4.4）即触发完整发布：
+# 推送大写 V 开头的版本 tag（如 V1.0.0）即触发完整发布：
 #   1. 六架构静态链接的 Linux 二进制（release-install.sh 的 detect_arch 全集）
-#   2. 面板与脚本资产（admin.html / admin.js / emby-in-one-cli.sh / release-install.sh）
-#   3. Docker 模式在线更新用的源码包 Emby-In-One-docker-<v版本>.tar.gz
-#   4. 以上每个资产的 .sha256（V1.4.4 起安装/更新脚本强制走校验，缺文件则告警放行）
+#   2. 面板与脚本资产（admin.html / admin.js / emby-in-one-next-cli.sh / release-install.sh）
+#   3. Docker 模式在线更新用的源码包 Emby-In-One-Next-docker-<v版本>.tar.gz
+#   4. 以上每个资产的 .sha256（安装/更新脚本强制走校验，缺文件则告警放行）
 #   5. 从 Update.md 提取对应版本的更新日志，创建 GitHub Release 并上传全部资产
 #
-# 命名约定（release-install.sh / emby-in-one-cli.sh 按此拼 URL，错了会 404）：
-#   tag 与 Release 标题用大写 V（V1.4.4），资产文件名内的版本用小写 v（v1.4.4）。
+# 命名约定（release-install.sh / emby-in-one-next-cli.sh 按此拼 URL，错了会 404）：
+#   tag 与 Release 标题用大写 V（V1.0.0），资产文件名内的版本用小写 v（v1.0.0）。
 #
 # 预发布：tag 带后缀（V1.4.5-rc1 / V1.4.5-beta.1）自动发布为 Pre-release，
 #   releases/latest 仍指向上一个正式版，不带参数的安装/在线更新不会拿到预发布；
@@ -24,7 +24,7 @@ concurrency:
   group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
-# 本工作流只在 GitHub 的 ArizeSky/Emby-In-One 上执行：
+# 本工作流只在 GitHub 的 Takumilove/Emby-In-One-Next 上执行：
 # 仓库会镜像到 Gitea（MineNine/Emby-In-One），若 Gitea Actions 已启用，
 # 同步过去的 V 开头 tag 也会触发本文件——两个 job 的 if 守卫会让它
 # 在 Gitea 上直接跳过，发布只在 GitHub 进行。
@@ -87,7 +87,7 @@ jobs:
             CGO_ENABLED=1 CC="$cc" GOARM="$goarm" GOOS=linux GOARCH="$goarch" \
               go build -trimpath -buildvcs=false -tags "netgo osusergo" \
               -ldflags "-s -w -X main.Version=${VERSION} -extldflags -static" \
-              -o "dist/Emby-In-One-linux-${goarch}-${VERSION}" ./cmd/emby-in-one
+              -o "dist/Emby-In-One-Next-linux-${goarch}-${VERSION}" ./cmd/emby-in-one-next
           }
           build amd64   gcc
           build arm64   aarch64-linux-gnu-gcc
@@ -103,8 +103,8 @@ jobs:
           set -euo pipefail
           VERSION="v${TAG#V}"
           # 容器本身是 linux/amd64，可以直接执行一次 --version 验证产物
-          "./dist/Emby-In-One-linux-amd64-${VERSION}" --version
-          for f in dist/Emby-In-One-linux-*; do
+          "./dist/Emby-In-One-Next-linux-amd64-${VERSION}" --version
+          for f in dist/Emby-In-One-Next-linux-*; do
             if ! file "$f" | grep -q "statically linked"; then
               echo "::error::${f} 不是静态链接" >&2
               file "$f" >&2
@@ -115,7 +115,7 @@ jobs:
       - name: Stage panel and script assets
         run: |
           cp public/admin.html public/admin.js dist/
-          cp emby-in-one-cli.sh release-install.sh dist/
+          cp emby-in-one-next-cli.sh release-install.sh dist/
 
       - name: Build Docker source archive
         env:
@@ -126,14 +126,14 @@ jobs:
           # 容器 job 的工作区属主与运行用户不一致，git archive 前先声明信任
           # （go build 的 VCS 戳记就是栽在这个属主差异上，见上一步注释）。
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-          # emby-in-one-cli.sh 的 Docker 模式在线更新按此清单解包部署
+          # emby-in-one-next-cli.sh 的 Docker 模式在线更新按此清单解包部署
           # （cmd / internal / third_party / public / go.mod + Dockerfile 等）。
           # git archive 只含已提交文件，并按 .gitattributes 统一为 LF 行尾。
-          git archive --format=tar.gz --prefix="emby-in-one/" \
-            -o "dist/Emby-In-One-docker-${VERSION}.tar.gz" HEAD \
+          git archive --format=tar.gz --prefix="emby-in-one-next/" \
+            -o "dist/Emby-In-One-Next-docker-${VERSION}.tar.gz" HEAD \
             cmd internal third_party public go.mod \
             Dockerfile .dockerignore docker-compose.yml \
-            emby-in-one-cli.sh \
+            emby-in-one-next-cli.sh \
             README.md README_EN.md Update.md LICENSE
 
       - name: Generate .sha256 for every asset
@@ -183,7 +183,7 @@ jobs:
             exit 1
           fi
           {
-            echo "# Emby In One ${TAG}"
+            echo "# Emby In One Next ${TAG}"
             echo
             if [[ "$PRERELEASE" == true ]]; then
               echo "> ⚠️ **预发布版本**，供测试尝鲜；不带参数的安装脚本仍会安装最新稳定版。"
@@ -207,7 +207,7 @@ jobs:
             if [[ "$PRERELEASE" == true ]]; then
               echo "SSH 菜单的在线更新只会升级到最新稳定版；安装本预发布需用上面的命令显式指定版本，Docker 模式可用菜单 [15] 指定 ${TAG} 重建。"
             else
-              echo "已安装用户可在 SSH 菜单（\`emby-in-one\` 命令）中选择在线更新；Docker 部署的在线更新使用本页的 Emby-In-One-docker-${VERSION}.tar.gz。"
+              echo "已安装用户可在 SSH 菜单（\`emby-in-one-next\` 命令）中选择在线更新；Docker 部署的在线更新使用本页的 Emby-In-One-Next-docker-${VERSION}.tar.gz。"
             fi
             echo
             echo "---"

@@ -17,7 +17,7 @@ Only the latest version on the `main` branch receives security fixes. Please upd
 
 如发现安全问题，请通过以下方式私下联系：
 
-- **GitHub Security Advisories**：[提交私密报告](https://github.com/ArizeSky/Emby-In-One/security/advisories/new)
+- **GitHub Security Advisories**：[提交私密报告](https://github.com/Takumilove/Emby-In-One-Next/security/advisories/new)
 - 或通过 GitHub 私信联系仓库维护者
 
 报告时请尽量包含：

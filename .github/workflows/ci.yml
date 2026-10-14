@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Syntax check
         run: |
-          for script in install.sh release-install.sh emby-in-one-cli.sh; do
+          for script in install.sh release-install.sh emby-in-one-next-cli.sh; do
             bash -n "$script"
           done
       # Advisory for now: the install scripts have not been made shellcheck-clean yet, and a
@@ -64,4 +64,4 @@ jobs:
         continue-on-error: true
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck --severity=error install.sh release-install.sh emby-in-one-cli.sh
+          shellcheck --severity=error install.sh release-install.sh emby-in-one-next-cli.sh

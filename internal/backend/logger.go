@@ -59,7 +59,14 @@ func NewLogger(cfg LogConfig) *Logger {
 	}
 	_ = os.MkdirAll(dataDir, 0o755)
 
-	filePath := filepath.Join(dataDir, "emby-in-one.log")
+	// 默认日志文件名为 emby-in-one-next.log；若旧版 emby-in-one.log 存在且新文件不存在，则兼容沿用
+	filePath := filepath.Join(dataDir, "emby-in-one-next.log")
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		oldPath := filepath.Join(dataDir, "emby-in-one.log")
+		if _, oldErr := os.Stat(oldPath); oldErr == nil {
+			filePath = oldPath
+		}
+	}
 
 	maxBuffer := cfg.MaxBuffer
 	if maxBuffer <= 0 {

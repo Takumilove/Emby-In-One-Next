@@ -21,7 +21,7 @@ func newTestLogger(t *testing.T, maxSize int64, keep int) (*Logger, string) {
 		KeepFiles:    keep,
 	})
 	t.Cleanup(func() { _ = logger.Close() })
-	return logger, filepath.Join(dir, "emby-in-one.log")
+	return logger, logger.FilePath()
 }
 
 func readLogFile(t *testing.T, path string) string {
