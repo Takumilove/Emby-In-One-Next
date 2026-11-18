@@ -40,3 +40,7 @@ coverage.out
 
 # ---- Local smoke-test helpers (contain server credentials) ----
 .smoke/
+
+# ---- Local agent rules ----
+agent.md
+AGENT.md

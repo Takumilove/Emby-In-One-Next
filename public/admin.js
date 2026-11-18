@@ -8,6 +8,7 @@ createApp({
       currentPage: 'dashboard', pages: [
         {id:'dashboard', name:'系统概览', icon:'layout-dashboard'},
         {id:'servers', name:'上游节点', icon:'server'},
+        {id:'sessions', name:'在线播放', icon:'play-circle'},
         {id:'users', name:'用户管理', icon:'users'},
         {id:'proxies', name:'网络代理', icon:'shield'},
         {id:'settings', name:'全局设置', icon:'settings'},
@@ -15,6 +16,7 @@ createApp({
       ],
       stats: { upstreamCount: 0, upstreamOnline: 0, idMappings: { mappingCount: 0, persistent: true }, upstream: [] },
       upstreamList: [], proxyList: [],
+      activeSessions: [],
       settings: { serverName: '', playbackMode: 'proxy', adminUsername: '', adminPassword: '', currentPassword: '', timeouts: { api: 30000, global: 15000, login: 10000, healthCheck: 10000, healthInterval: 60000, searchGracePeriod: 3000, metadataGracePeriod: 3000, latestGracePeriod: 0 } },
       adminUsernameOriginal: '',   // 服务端当前的管理员用户名，用于判断这次保存是否真的改了用户名
       logs: [], isLoadingLogs: false, saveSuccess: false,
@@ -22,7 +24,7 @@ createApp({
       showModal: false, editIndex: null, serverForm: {},
       showProxyModal: false, proxyForm: { name: '', url: '' },
       proxyTestState: { loading: false, result: null },
-      userList: [], showUserModal: false, editUserId: null, userForm: { username: '', password: '', enabled: true, allowedServers: [] },
+      userList: [], showUserModal: false, editUserId: null, userForm: { username: '', password: '', enabled: true, allowedServers: [], maxConcurrent: 1 },
       userLibraryGroups: [], adminHomeOpen: false, adminLibraryGroups: [], libraryGroupsLoading: false
     };
   },
@@ -42,7 +44,16 @@ createApp({
     }
   },
   watch: {
-    currentPage(v) { if(this._refreshTimer) clearTimeout(this._refreshTimer); this._refreshTimer = setTimeout(()=>{this.refresh(); this.$nextTick(() => lucide.createIcons());}, 50); }
+    currentPage(v) {
+      if(this._refreshTimer) clearTimeout(this._refreshTimer);
+      if(this._sessionsPoller) clearInterval(this._sessionsPoller);
+      this._refreshTimer = setTimeout(()=>{this.refresh(); this.$nextTick(() => lucide.createIcons());}, 50);
+      if (v === 'sessions') {
+        this._sessionsPoller = setInterval(() => {
+          if (this.currentPage === 'sessions') this.refreshSessions();
+        }, 4000);
+      }
+    }
   },
   mounted() { const t = localStorage.getItem('eio_token'); if(t) this.checkAuth(t); this.$nextTick(() => lucide.createIcons()); },
   methods: {
@@ -74,10 +85,39 @@ createApp({
     refresh() {
       if(this.currentPage === 'dashboard') this.refreshDashboard();
       if(this.currentPage === 'servers') this.refreshServers();
+      if(this.currentPage === 'sessions') this.refreshSessions();
       if(this.currentPage === 'users') this.refreshUsers();
       if(this.currentPage === 'proxies') this.refreshProxies();
       if(this.currentPage === 'settings') this.refreshSettings();
       if(this.currentPage === 'logs') this.refreshLogs();
+    },
+    async refreshSessions() {
+      try {
+        this.activeSessions = await this.api('/admin/api/sessions');
+      } catch(e) {
+        this.activeSessions = [];
+      }
+      this.$nextTick(() => lucide.createIcons());
+    },
+    async kickSession(s) {
+      const name = s.username || '该用户';
+      const dev = s.deviceName || s.client || '该设备';
+      if (!confirm(`确定要强制将 ${name}（${dev}）踢出下线吗？`)) return;
+      try {
+        await this.api('/admin/api/sessions/' + s.id, { method: 'DELETE' });
+        await this.refreshSessions();
+      } catch(e) {
+        alert('踢出失败：' + (e.message || '未知错误'));
+      }
+    },
+    formatTicks(ticks) {
+      if (!ticks || ticks <= 0) return '00:00:00';
+      const totalSec = Math.floor(ticks / 10000000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      const pad = n => String(n).padStart(2, '0');
+      return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
     },
     async refreshDashboard() { try { this.stats = await this.api('/admin/api/status'); } catch(e) {} this.refreshClientInfo(); this.$nextTick(()=>lucide.createIcons()); },
     async refreshClientInfo() { try { this.clientInfo = await this.api('/admin/api/client-info'); } catch(e) {} this.$nextTick(()=>lucide.createIcons()); },
@@ -172,10 +212,10 @@ createApp({
     async saveProxy() { try { await this.api('/admin/api/proxies', { method:'POST', body:JSON.stringify(this.proxyForm) }); this.showProxyModal = false; await this.refreshProxies(); } catch(e) { alert('添加失败：' + (e.message || '未知错误')); } },
     async deleteProxy(id) { if(!confirm('删除代理？')) return; try { await this.api('/admin/api/proxies/'+id, { method:'DELETE' }); await this.refreshProxies(); } catch(e) { alert('删除失败：' + (e.message || '未知错误')); } },
     async refreshUsers() { try { this.userList = await this.api('/admin/api/users'); } catch(e) { this.userList = []; } try { this.upstreamList = await this.api('/admin/api/upstream'); } catch(e) {} this.$nextTick(()=>lucide.createIcons()); },
-    openAddUser() { this.editUserId = null; this.userForm = { username:'', password:'', enabled:true, allowedServers:[] }; this.userLibraryGroups = []; this.showUserModal = true; this.$nextTick(()=>lucide.createIcons()); },
+    openAddUser() { this.editUserId = null; this.userForm = { username:'', password:'', enabled:true, allowedServers:[], maxConcurrent: 1 }; this.userLibraryGroups = []; this.showUserModal = true; this.$nextTick(()=>lucide.createIcons()); },
     async editUser(u) {
       this.editUserId = u.id;
-      this.userForm = { username:u.username, password:'', enabled:u.enabled, allowedServers: u.allowedServers ? [...u.allowedServers] : [] };
+      this.userForm = { username:u.username, password:'', enabled:u.enabled, allowedServers: u.allowedServers ? [...u.allowedServers] : [], maxConcurrent: u.maxConcurrent !== undefined ? u.maxConcurrent : 1 };
       this.showUserModal = true;
       this.userLibraryGroups = [];
       this.libraryGroupsLoading = true;
@@ -192,6 +232,7 @@ createApp({
     },
     async saveUser() {
       try {
+        const maxConcurrent = this.userForm.maxConcurrent !== undefined && this.userForm.maxConcurrent !== null && this.userForm.maxConcurrent !== '' ? Number(this.userForm.maxConcurrent) : 1;
         if (this.editUserId) {
           const body = {};
           if (this.userForm.username) body.username = this.userForm.username;
@@ -199,13 +240,14 @@ createApp({
           if (this.userForm.password) body.password = this.userForm.password;
           body.enabled = this.userForm.enabled;
           body.allowedServers = this.userForm.allowedServers.length > 0 ? this.userForm.allowedServers : null;
+          body.maxConcurrent = maxConcurrent;
           // 离线服务器不提交 key（后端保持原配置），在线服务器提交勾选结果（含空数组 = 全部显示）。
           body.hiddenLibraries = this.groupHiddenPayload(this.userLibraryGroups);
           await this.api('/admin/api/users/' + this.editUserId, { method:'PUT', body:JSON.stringify(body) });
         } else {
           if (!this.userForm.username || !this.userForm.password) { alert('用户名和密码不能为空'); return; }
           if (this.userForm.password.length < 8 || this.userForm.password.length > 128) { alert('密码长度必须介于 8 和 128 之间'); return; }
-          const body = { username:this.userForm.username, password:this.userForm.password, allowedServers: this.userForm.allowedServers.length > 0 ? this.userForm.allowedServers : null };
+          const body = { username:this.userForm.username, password:this.userForm.password, allowedServers: this.userForm.allowedServers.length > 0 ? this.userForm.allowedServers : null, maxConcurrent: maxConcurrent };
           await this.api('/admin/api/users', { method:'POST', body:JSON.stringify(body) });
         }
         this.showUserModal = false; await this.refreshUsers();

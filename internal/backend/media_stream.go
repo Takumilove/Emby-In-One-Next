@@ -268,11 +268,13 @@ func (a *App) switchPlaybackSlot(w http.ResponseWriter, r *http.Request, targetI
 		return true
 	}
 	cfg := a.ConfigStore.Snapshot()
-	var maxConcurrent int
+	var serverMaxConcurrent int
+	var serverName string
 	found := false
 	for _, u := range cfg.Upstream {
 		if u.ID == targetID {
-			maxConcurrent = u.MaxConcurrent
+			serverMaxConcurrent = u.MaxConcurrent
+			serverName = u.Name
 			found = true
 			break
 		}
@@ -280,11 +282,39 @@ func (a *App) switchPlaybackSlot(w http.ResponseWriter, r *http.Request, targetI
 	if !found {
 		return true
 	}
-	if !a.PlaybackLimiter.TryStart(reqCtx.ProxyUser.UserID, targetID, virtualItemID, maxConcurrent) {
-		writeJSON(w, http.StatusTooManyRequests, map[string]any{"message": "已达到最大同时播放数限制"})
+
+	userMaxConcurrent := 1
+	if a.UserStore != nil {
+		if u := a.UserStore.Get(reqCtx.ProxyUser.UserID); u != nil {
+			userMaxConcurrent = u.MaxConcurrent
+		}
+	}
+
+	clientName, clientVer, deviceName, deviceID := extractClientDeviceInfo(r)
+	sessionKey := buildSessionKey(reqCtx.ProxyUser.UserID, deviceID)
+
+	allowed, reason := a.PlaybackLimiter.TryStartSession(&ActiveSession{
+		SessionKey:    sessionKey,
+		UserID:        reqCtx.ProxyUser.UserID,
+		Username:      reqCtx.ProxyUser.Username,
+		Client:        clientName,
+		ClientVersion: clientVer,
+		DeviceName:    deviceName,
+		DeviceID:      deviceID,
+		IP:            clientIP(r, cfg.Server.TrustProxy),
+		ServerID:      targetID,
+		ServerName:    serverName,
+		ItemID:        virtualItemID,
+		PlayMethod:    "ProxyStream",
+	}, serverMaxConcurrent, userMaxConcurrent)
+
+	if !allowed {
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"message": reason})
 		return false
 	}
-	a.PlaybackLimiter.Stop(reqCtx.ProxyUser.UserID, previousID)
+	if previousID != "" && previousID != targetID {
+		a.PlaybackLimiter.Stop(reqCtx.ProxyUser.UserID, previousID)
+	}
 	return true
 }
 

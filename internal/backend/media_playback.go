@@ -21,18 +21,71 @@ func (a *App) handlePlaybackInfo(w http.ResponseWriter, r *http.Request) {
 	if !a.requireServerAccess(w, r, resolved) {
 		return
 	}
-	// Concurrent playback limit check for regular users
-	if limiterUserID, ok := a.playbackLimiterKey(reqCtx, r, resolved.ServerID); ok {
-		var maxConcurrent int
-		for _, u := range a.ConfigStore.Snapshot().Upstream {
-			if u.ID == resolved.ServerID {
-				maxConcurrent = u.MaxConcurrent
-				break
-			}
+	// 并发限制校验
+	var serverMaxConcurrent int
+	var serverName string
+	for _, u := range a.ConfigStore.Snapshot().Upstream {
+		if u.ID == resolved.ServerID {
+			serverMaxConcurrent = u.MaxConcurrent
+			serverName = u.Name
+			break
 		}
-		if !a.PlaybackLimiter.TryStart(limiterUserID, resolved.ServerID, r.PathValue("itemId"), maxConcurrent) {
-			writeJSON(w, http.StatusTooManyRequests, map[string]any{"message": "已达到最大同时播放数限制"})
-			return
+	}
+
+	isAdmin := reqCtx != nil && reqCtx.ProxyUser != nil && reqCtx.ProxyUser.Role == "admin"
+	limiterUserID := ""
+	username := ""
+	if reqCtx != nil && reqCtx.ProxyUser != nil {
+		limiterUserID = reqCtx.ProxyUser.UserID
+		username = reqCtx.ProxyUser.Username
+	}
+
+	clientName, clientVer, deviceName, deviceID := extractClientDeviceInfo(r)
+	sessionKey := buildSessionKey(limiterUserID, deviceID)
+
+	if a.PlaybackLimiter != nil && limiterUserID != "" {
+		if !isAdmin {
+			userMaxConcurrent := 1
+			if a.UserStore != nil {
+				if u := a.UserStore.Get(limiterUserID); u != nil {
+					userMaxConcurrent = u.MaxConcurrent
+				}
+			}
+			allowed, reason := a.PlaybackLimiter.TryStartSession(&ActiveSession{
+				SessionKey:    sessionKey,
+				UserID:        limiterUserID,
+				Username:      username,
+				Client:        clientName,
+				ClientVersion: clientVer,
+				DeviceName:    deviceName,
+				DeviceID:      deviceID,
+				IP:            clientIP(r, a.ConfigStore.Snapshot().Server.TrustProxy),
+				ServerID:      resolved.ServerID,
+				ServerName:    serverName,
+				ItemID:        r.PathValue("itemId"),
+				PlayMethod:    "DirectStream",
+			}, serverMaxConcurrent, userMaxConcurrent)
+
+			if !allowed {
+				writeJSON(w, http.StatusTooManyRequests, map[string]any{"message": reason})
+				return
+			}
+		} else {
+			// 管理员会话：仅登记会话信息，不设并发上限
+			a.PlaybackLimiter.RecordAdminSession(&ActiveSession{
+				SessionKey:    sessionKey,
+				UserID:        limiterUserID,
+				Username:      username,
+				Client:        clientName,
+				ClientVersion: clientVer,
+				DeviceName:    deviceName,
+				DeviceID:      deviceID,
+				IP:            clientIP(r, a.ConfigStore.Snapshot().Server.TrustProxy),
+				ServerID:      resolved.ServerID,
+				ServerName:    serverName,
+				ItemID:        r.PathValue("itemId"),
+				PlayMethod:    "DirectStream",
+			})
 		}
 	}
 	instances := a.collectAllowedInstances(reqCtx, resolved)
@@ -216,6 +269,7 @@ func (a *App) handlePlaybackInfo(w http.ResponseWriter, r *http.Request) {
 		// the server's capacity for the full heartbeat timeout while they could not
 		// actually start a stream.
 		if limiterUserID, ok := a.playbackLimiterKey(reqCtx, r, resolved.ServerID); ok {
+			a.PlaybackLimiter.StopSession(sessionKey)
 			a.PlaybackLimiter.Stop(limiterUserID, resolved.ServerID)
 		}
 		writeJSON(w, http.StatusBadGateway, map[string]any{"message": "Failed to fetch playback info from upstream"})

@@ -44,6 +44,8 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/api/users", a.withContext(a.requireAdmin(a.handleAdminUsersCreate)))
 	mux.HandleFunc("PUT /admin/api/users/{id}", a.withContext(a.requireAdmin(a.handleAdminUsersUpdate)))
 	mux.HandleFunc("DELETE /admin/api/users/{id}", a.withContext(a.requireAdmin(a.handleAdminUsersDelete)))
+	mux.HandleFunc("GET /admin/api/sessions", a.withContext(a.requireAdmin(a.handleAdminSessionsList)))
+	mux.HandleFunc("DELETE /admin/api/sessions/{id}", a.withContext(a.requireAdmin(a.handleAdminSessionDelete)))
 	mux.HandleFunc("GET /admin/api/upstream/{id}/libraries", a.withContext(a.requireAdmin(a.handleAdminUpstreamLibraries)))
 	mux.HandleFunc("GET /admin/api/home-libraries", a.withContext(a.requireAdmin(a.handleAdminHomeLibrariesGet)))
 	mux.HandleFunc("PUT /admin/api/home-libraries", a.withContext(a.requireAdmin(a.handleAdminHomeLibrariesPut)))

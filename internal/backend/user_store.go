@@ -14,6 +14,7 @@ type User struct {
 	Password       string // scrypt hash
 	Enabled        bool
 	AllowedServers []string
+	MaxConcurrent  int   // 每用户最大同时播放数，0 为无限制，默认 1
 	CreatedAt      int64 // Unix milliseconds
 }
 
@@ -36,6 +37,7 @@ func NewUserStore(db *sqliteDB, logger *Logger) (*UserStore, error) {
 			username TEXT UNIQUE NOT NULL COLLATE NOCASE,
 			password TEXT NOT NULL,
 			enabled INTEGER NOT NULL DEFAULT 1,
+			max_concurrent INTEGER NOT NULL DEFAULT 1,
 			created_at INTEGER NOT NULL
 		);
 		CREATE TABLE IF NOT EXISTS user_servers (
@@ -47,6 +49,7 @@ func NewUserStore(db *sqliteDB, logger *Logger) (*UserStore, error) {
 	`); err != nil {
 		return nil, fmt.Errorf("user_store: create tables: %w", err)
 	}
+	_ = db.exec(`ALTER TABLE users ADD COLUMN max_concurrent INTEGER NOT NULL DEFAULT 1;`)
 	store := &UserStore{
 		db:     db,
 		users:  make(map[string]*User),
@@ -66,7 +69,7 @@ func (s *UserStore) loadAll() error {
 	s.users = make(map[string]*User)
 	s.byName = make(map[string]*User)
 
-	stmt, err := s.db.prepare(`SELECT id, username, password, enabled, created_at FROM users`)
+	stmt, err := s.db.prepare(`SELECT id, username, password, enabled, created_at, max_concurrent FROM users`)
 	if err != nil {
 		return err
 	}
@@ -79,12 +82,17 @@ func (s *UserStore) loadAll() error {
 		if !hasRow {
 			break
 		}
+		maxConcurrent := stmt.columnInt(5)
+		if maxConcurrent < 0 {
+			maxConcurrent = 1
+		}
 		user := &User{
-			ID:        stmt.columnText(0),
-			Username:  stmt.columnText(1),
-			Password:  stmt.columnText(2),
-			Enabled:   stmt.columnInt(3) != 0,
-			CreatedAt: stmt.columnInt64(4),
+			ID:            stmt.columnText(0),
+			Username:      stmt.columnText(1),
+			Password:      stmt.columnText(2),
+			Enabled:       stmt.columnInt(3) != 0,
+			CreatedAt:     stmt.columnInt64(4),
+			MaxConcurrent: maxConcurrent,
 		}
 		s.users[user.ID] = user
 		s.byName[strings.ToLower(user.Username)] = user
@@ -113,6 +121,10 @@ func (s *UserStore) loadAll() error {
 }
 
 func (s *UserStore) Create(username, password string, allowedServers []string) (*User, error) {
+	return s.CreateWithLimit(username, password, allowedServers, 1)
+}
+
+func (s *UserStore) CreateWithLimit(username, password string, allowedServers []string, maxConcurrent int) (*User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -125,13 +137,17 @@ func (s *UserStore) Create(username, password string, allowedServers []string) (
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
+	if maxConcurrent < 0 {
+		maxConcurrent = 1
+	}
+
 	id := randomHex(16)
 	now := time.Now().UnixMilli()
 
 	if err := s.db.withWriteTx(func() error {
 		if err := s.db.execParams(
-			`INSERT INTO users (id, username, password, enabled, created_at) VALUES (?, ?, ?, 1, ?)`,
-			id, username, hashed, now,
+			`INSERT INTO users (id, username, password, enabled, created_at, max_concurrent) VALUES (?, ?, ?, 1, ?, ?)`,
+			id, username, hashed, now, maxConcurrent,
 		); err != nil {
 			return err
 		}
@@ -146,6 +162,7 @@ func (s *UserStore) Create(username, password string, allowedServers []string) (
 		Password:       hashed,
 		Enabled:        true,
 		AllowedServers: append([]string(nil), allowedServers...),
+		MaxConcurrent:  maxConcurrent,
 		CreatedAt:      now,
 	}
 	s.users[id] = user
@@ -217,6 +234,10 @@ func (s *UserStore) List() []*User {
 }
 
 func (s *UserStore) Update(id string, username *string, password *string, enabled *bool, allowedServers *[]string) error {
+	return s.UpdateWithLimit(id, username, password, enabled, allowedServers, nil)
+}
+
+func (s *UserStore) UpdateWithLimit(id string, username *string, password *string, enabled *bool, allowedServers *[]string, maxConcurrent *int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -256,6 +277,15 @@ func (s *UserStore) Update(id string, username *string, password *string, enable
 				return err
 			}
 		}
+		if maxConcurrent != nil {
+			mc := *maxConcurrent
+			if mc < 0 {
+				mc = 1
+			}
+			if err := s.db.execParams(`UPDATE users SET max_concurrent = ? WHERE id = ?`, mc, id); err != nil {
+				return err
+			}
+		}
 		if allowedServers != nil {
 			return s.replaceAllowedServersParams(id, *allowedServers)
 		}
@@ -276,6 +306,13 @@ func (s *UserStore) Update(id string, username *string, password *string, enable
 	}
 	if enabled != nil {
 		user.Enabled = *enabled
+	}
+	if maxConcurrent != nil {
+		mc := *maxConcurrent
+		if mc < 0 {
+			mc = 1
+		}
+		user.MaxConcurrent = mc
 	}
 	if allowedServers != nil {
 		user.AllowedServers = append([]string(nil), *allowedServers...)
@@ -359,6 +396,7 @@ func (s *UserStore) copyUser(user *User) *User {
 		Password:       user.Password,
 		Enabled:        user.Enabled,
 		AllowedServers: append([]string(nil), user.AllowedServers...),
+		MaxConcurrent:  user.MaxConcurrent,
 		CreatedAt:      user.CreatedAt,
 	}
 }

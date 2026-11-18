@@ -616,6 +616,7 @@ func (a *App) handleAdminUsersList(w http.ResponseWriter, r *http.Request) {
 			"username":        u.Username,
 			"enabled":         u.Enabled,
 			"allowedServers":  u.AllowedServers,
+			"maxConcurrent":   u.MaxConcurrent,
 			"hiddenLibraries": a.hiddenLibrariesJSONFor(u.ID),
 			"serverNames":     serverNames,
 			"createdAt":       u.CreatedAt,
@@ -633,6 +634,7 @@ func (a *App) handleAdminUsersCreate(w http.ResponseWriter, r *http.Request) {
 		Username       string   `json:"username"`
 		Password       string   `json:"password"`
 		AllowedServers []string `json:"allowedServers"`
+		MaxConcurrent  *int     `json:"maxConcurrent"`
 	}
 	if err := decodeJSONBody(r, &input); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Invalid request body"})
@@ -651,7 +653,11 @@ func (a *App) handleAdminUsersCreate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "用户名与管理员冲突"})
 		return
 	}
-	user, err := a.UserStore.Create(input.Username, input.Password, input.AllowedServers)
+	maxConcurrent := 1
+	if input.MaxConcurrent != nil {
+		maxConcurrent = *input.MaxConcurrent
+	}
+	user, err := a.UserStore.CreateWithLimit(input.Username, input.Password, input.AllowedServers, maxConcurrent)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "already exists") {
 			writeJSON(w, http.StatusConflict, map[string]any{"error": "用户名已存在"})
@@ -674,6 +680,7 @@ func (a *App) handleAdminUsersUpdate(w http.ResponseWriter, r *http.Request) {
 		Password        *string              `json:"password"`
 		Enabled         *bool                `json:"enabled"`
 		AllowedServers  *[]string            `json:"allowedServers"`
+		MaxConcurrent   *int                 `json:"maxConcurrent"`
 		HiddenLibraries map[string]*[]string `json:"hiddenLibraries"`
 	}
 	if err := decodeJSONBody(r, &input); err != nil {
@@ -693,7 +700,7 @@ func (a *App) handleAdminUsersUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := a.UserStore.Update(id, input.Username, input.Password, input.Enabled, input.AllowedServers); err != nil {
+	if err := a.UserStore.UpdateWithLimit(id, input.Username, input.Password, input.Enabled, input.AllowedServers, input.MaxConcurrent); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}
@@ -748,6 +755,29 @@ func (a *App) handleAdminUsersDelete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+func (a *App) handleAdminSessionsList(w http.ResponseWriter, r *http.Request) {
+	if a.PlaybackLimiter == nil {
+		writeJSON(w, http.StatusOK, []any{})
+		return
+	}
+	sessions := a.PlaybackLimiter.GetActiveSessions()
+	writeJSON(w, http.StatusOK, sessions)
+}
+
+func (a *App) handleAdminSessionDelete(w http.ResponseWriter, r *http.Request) {
+	if a.PlaybackLimiter == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"success": true})
+		return
+	}
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Session ID required"})
+		return
+	}
+	kicked := a.PlaybackLimiter.KickSession(id)
+	writeJSON(w, http.StatusOK, map[string]any{"success": kicked})
 }
 
 func (a *App) commitConfig(nextCfg Config) error {

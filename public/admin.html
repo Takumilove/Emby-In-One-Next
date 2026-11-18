@@ -195,6 +195,89 @@
       <div class="pt-4 flex items-center space-x-4"><button @click="saveSettings" class="btn-primary px-8 py-2.5 rounded-xl font-bold">保存修改</button><span v-if="saveSuccess" class="text-green-600 text-sm flex items-center space-x-1"><i data-lucide="check-circle" class="w-4 h-4"></i><span>保存成功！</span></span></div>
     </div>
 
+    <!-- Active Sessions -->
+    <div v-if="currentPage === 'sessions'" class="space-y-6">
+      <div class="card p-4 md:p-6 flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h4 class="font-bold flex items-center space-x-2">
+            <span>实时在线会话</span>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">
+              {{ activeSessions.length }} 台设备在线
+            </span>
+          </h4>
+          <p class="text-sm text-slate-500">实时查看当前正在播放的用户、客户端设备与媒体进度，支持强制踢出</p>
+        </div>
+        <button @click="refreshSessions" class="bg-white border px-4 py-2 rounded-lg flex items-center space-x-2 text-slate-600 hover:bg-slate-50">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          <span>刷新</span>
+        </button>
+      </div>
+
+      <div v-if="activeSessions.length === 0" class="card p-12 text-center text-slate-400 italic">
+        当前暂无用户在线播放
+      </div>
+      <div v-else class="card overflow-x-auto">
+        <table class="w-full min-w-[850px] text-left border-collapse">
+          <thead class="bg-slate-50 text-slate-500 text-xs font-semibold uppercase">
+            <tr>
+              <th class="px-6 py-4">用户</th>
+              <th class="px-6 py-4">设备 / 客户端</th>
+              <th class="px-6 py-4">IP 地址</th>
+              <th class="px-6 py-4">上游节点</th>
+              <th class="px-6 py-4">正在播放</th>
+              <th class="px-6 py-4">进度</th>
+              <th class="px-6 py-4">状态</th>
+              <th class="px-6 py-4">操作</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr v-for="s in activeSessions" :key="s.id" class="hover:bg-slate-50/50">
+              <td class="px-6 py-4">
+                <span class="font-bold text-slate-800">{{ s.username || '未知用户' }}</span>
+              </td>
+              <td class="px-6 py-4 text-sm">
+                <div class="font-medium text-slate-700">{{ s.deviceName || s.client }}</div>
+                <div class="text-xs text-slate-400">{{ s.client }} <span v-if="s.clientVersion">{{ s.clientVersion }}</span></div>
+              </td>
+              <td class="px-6 py-4 text-xs font-mono text-slate-500">{{ s.ip || '—' }}</td>
+              <td class="px-6 py-4 text-sm">
+                <span class="px-2 py-1 bg-slate-100 rounded text-xs text-slate-600 font-medium">{{ s.serverName || s.serverId }}</span>
+              </td>
+              <td class="px-6 py-4 text-sm">
+                <div class="font-medium text-slate-800 truncate max-w-xs" :title="s.itemName || s.itemId">{{ s.itemName || s.itemId }}</div>
+                <div class="text-xs text-slate-400">{{ s.playMethod || 'DirectStream' }} <span v-if="s.itemType">· {{ s.itemType }}</span></div>
+              </td>
+              <td class="px-6 py-4 text-xs text-slate-600">
+                <div v-if="s.runTimeTicks > 0">
+                  <div class="flex justify-between mb-1">
+                    <span>{{ formatTicks(s.positionTicks) }} / {{ formatTicks(s.runTimeTicks) }}</span>
+                    <span>{{ Math.round((s.positionTicks / s.runTimeTicks) * 100) }}%</span>
+                  </div>
+                  <div class="w-28 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                    <div class="bg-blue-600 h-1.5 rounded-full" :style="{ width: Math.min(100, Math.round((s.positionTicks / s.runTimeTicks) * 100)) + '%' }"></div>
+                  </div>
+                </div>
+                <div v-else class="text-slate-400">准备播放...</div>
+              </td>
+              <td class="px-6 py-4">
+                <span v-if="s.isPaused" class="px-2 py-1 bg-amber-50 text-amber-600 border border-amber-200 rounded-full text-xs font-bold">已暂停</span>
+                <span v-else class="px-2 py-1 bg-green-50 text-green-600 border border-green-200 rounded-full text-xs font-bold flex items-center space-x-1 w-fit">
+                  <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  <span>播放中</span>
+                </span>
+              </td>
+              <td class="px-6 py-4">
+                <button @click="kickSession(s)" class="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold flex items-center space-x-1 transition-colors">
+                  <i data-lucide="power" class="w-3.5 h-3.5"></i>
+                  <span>强制下线</span>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Users -->
     <div v-if="currentPage === 'users'" class="space-y-6">
       <div class="card p-4 md:p-6 flex flex-wrap justify-between items-center gap-3">
@@ -207,13 +290,17 @@
       <div v-if="userList.length === 0" class="card p-12 text-center text-slate-400 italic">暂未添加普通用户</div>
       <div v-else class="card overflow-x-auto">
         <table class="w-full min-w-[600px] text-left border-collapse">
-          <thead class="bg-slate-50 text-slate-500 text-xs font-semibold uppercase"><tr><th class="px-6 py-4">用户名</th><th class="px-6 py-4">允许服务器</th><th class="px-6 py-4">状态</th><th class="px-6 py-4">创建时间</th><th class="px-6 py-4">操作</th></tr></thead>
+          <thead class="bg-slate-50 text-slate-500 text-xs font-semibold uppercase"><tr><th class="px-6 py-4">用户名</th><th class="px-6 py-4">允许服务器</th><th class="px-6 py-4">同时播放限制</th><th class="px-6 py-4">状态</th><th class="px-6 py-4">创建时间</th><th class="px-6 py-4">操作</th></tr></thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-for="u in userList" :key="u.id" class="hover:bg-slate-50/50">
               <td class="px-6 py-4 font-medium">{{ u.username }}</td>
               <td class="px-6 py-4 text-sm">
                 <span v-if="!u.allowedServers || u.allowedServers.length === 0" class="text-green-600 font-bold">全部</span>
                 <span v-else class="text-slate-600">{{ (u.serverNames || []).join(', ') || u.allowedServers.join(', ') }}</span>
+              </td>
+              <td class="px-6 py-4 text-sm font-medium">
+                <span v-if="u.maxConcurrent === 0" class="text-slate-500">无限制</span>
+                <span v-else class="text-blue-600 font-bold">{{ u.maxConcurrent || 1 }} 台</span>
               </td>
               <td class="px-6 py-4"><span :class="u.enabled ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'" class="px-2 py-1 rounded-full text-xs font-bold border">{{ u.enabled ? '启用' : '禁用' }}</span></td>
               <td class="px-6 py-4 text-sm text-slate-500">{{ new Date(u.createdAt).toLocaleString() }}</td>
@@ -286,6 +373,11 @@
       <div class="space-y-4">
         <div><label class="text-sm font-medium">用户名</label><input type="text" v-model="userForm.username" class="w-full px-4 py-2 border rounded-lg outline-none"></div>
         <div><label class="text-sm font-medium">密码</label><input type="password" v-model="userForm.password" minlength="8" maxlength="128" :placeholder="editUserId ? '留空不修改' : '8–128 字符'" class="w-full px-4 py-2 border rounded-lg outline-none"><p class="mt-1 text-xs text-slate-400">长度需为 8–128 字符{{ editUserId ? '；留空表示不修改' : '' }}。</p></div>
+        <div>
+          <label class="text-sm font-medium">同时在线播放设备限制</label>
+          <input type="number" v-model.number="userForm.maxConcurrent" min="0" max="100" class="w-full px-4 py-2 border rounded-lg outline-none" placeholder="默认 1 台，0 为不限制">
+          <p class="mt-1 text-xs text-slate-400">限制该用户同时播放的设备数（默认 1 台，设为 0 表示不限制）。</p>
+        </div>
         <div v-if="editUserId" class="flex items-center space-x-2"><input type="checkbox" v-model="userForm.enabled" class="w-4 h-4 rounded border-slate-300 text-blue-600"><label class="text-sm font-medium">启用</label></div>
         <div><label class="text-sm font-medium block mb-2">允许访问的服务器</label>
           <p class="text-xs text-slate-400 mb-2">不勾选任何服务器表示允许访问全部</p>

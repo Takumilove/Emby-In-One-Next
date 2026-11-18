@@ -273,6 +273,41 @@ func asBodyMap(payload any) (map[string]any, bool) {
 	return body, ok
 }
 
+func (a *App) resolveItemTitle(r *http.Request, reqCtx *RequestContext, virtualItemID, originalItemID, serverID string, body map[string]any) (itemName, itemType string) {
+	if itemObj, ok := body["Item"].(map[string]any); ok {
+		if name, ok := itemObj["Name"].(string); ok && name != "" {
+			itemName = name
+		}
+		if t, ok := itemObj["Type"].(string); ok && t != "" {
+			itemType = t
+		}
+	}
+	if itemName != "" {
+		return itemName, itemType
+	}
+	if a.WatchStore != nil && reqCtx != nil && reqCtx.ProxyUser != nil {
+		if p := a.WatchStore.GetProgress(reqCtx.ProxyUser.UserID, virtualItemID); p != nil && p.Name != "" {
+			return p.Name, p.ItemType
+		}
+	}
+	client := a.Upstream.ClientByID(serverID)
+	if client != nil && client.IsOnline() && originalItemID != "" {
+		q := url.Values{}
+		q.Set("Fields", "ProviderIds")
+		if payload, err := client.RequestJSON(r.Context(), reqCtx, a.Identity, http.MethodGet, "/Users/"+client.clientUserID()+"/Items/"+originalItemID, q, nil); err == nil {
+			if item, ok := payload.(map[string]any); ok {
+				if n, ok := item["Name"].(string); ok {
+					itemName = n
+				}
+				if t, ok := item["Type"].(string); ok {
+					itemType = t
+				}
+			}
+		}
+	}
+	return itemName, itemType
+}
+
 func (a *App) handleSessionPlaying(w http.ResponseWriter, r *http.Request) {
 	payload, err := decodeOptionalJSON(r)
 	if err != nil {
@@ -290,19 +325,35 @@ func (a *App) handleSessionPlaying(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "Cannot determine target server"})
 		return
 	}
-	if !a.isServerAllowed(requestContextFrom(r.Context()), serverID) {
+	reqCtx := requestContextFrom(r.Context())
+	if !a.isServerAllowed(reqCtx, serverID) {
 		writeJSON(w, http.StatusForbidden, map[string]any{"message": "Access denied"})
 		return
 	}
+
+	clientName, clientVer, deviceName, deviceID := extractClientDeviceInfo(r)
+	if dev, ok := body["DeviceId"].(string); ok && dev != "" {
+		deviceID = dev
+	}
+	userID := ""
+	username := ""
+	if reqCtx != nil && reqCtx.ProxyUser != nil {
+		userID = reqCtx.ProxyUser.UserID
+		username = reqCtx.ProxyUser.Username
+	}
+	sessionKey := buildSessionKey(userID, deviceID)
+
+	if a.PlaybackLimiter != nil && a.PlaybackLimiter.IsKicked(sessionKey) {
+		writeJSON(w, http.StatusForbidden, map[string]any{"message": "会话已被管理员终止"})
+		return
+	}
+
 	client := a.Upstream.ClientByID(serverID)
 	if client == nil || !client.IsOnline() {
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Server not found"})
 		return
 	}
 	if err := a.forwardNoContent(r, client, http.MethodPost, "/Sessions/Playing", nil, body); err != nil {
-		// A preparation failure means the request never left the process, so the
-		// client gets the preparation status and no local progress is recorded for
-		// a play event that was never announced upstream.
 		if status, ok := preparationErrorStatus(err); ok {
 			writeJSON(w, status, preparationErrorBody(err))
 			return
@@ -313,8 +364,76 @@ func (a *App) handleSessionPlaying(w http.ResponseWriter, r *http.Request) {
 	}
 	a.recordSessionToWatchStore(r, virtualItemID, body, serverID, false)
 	if a.PlaybackLimiter != nil {
-		if reqCtx := requestContextFrom(r.Context()); reqCtx != nil && reqCtx.ProxyUser != nil && reqCtx.ProxyUser.Role != "admin" {
-			a.PlaybackLimiter.Heartbeat(reqCtx.ProxyUser.UserID, serverID)
+		var serverMaxConcurrent int
+		var serverName string
+		for _, u := range a.ConfigStore.Snapshot().Upstream {
+			if u.ID == serverID {
+				serverMaxConcurrent = u.MaxConcurrent
+				serverName = u.Name
+				break
+			}
+		}
+		userMaxConcurrent := 1
+		isAdmin := reqCtx != nil && reqCtx.ProxyUser != nil && reqCtx.ProxyUser.Role == "admin"
+		if isAdmin {
+			userMaxConcurrent = 0
+		} else if a.UserStore != nil && userID != "" {
+			if u := a.UserStore.Get(userID); u != nil {
+				userMaxConcurrent = u.MaxConcurrent
+			}
+		}
+
+		positionTicks, _ := numericInt64(body["PositionTicks"])
+		runtimeTicks, _ := numericInt64(body["RunTimeTicks"])
+		isPaused, _ := body["IsPaused"].(bool)
+		playMethod, _ := body["PlayMethod"].(string)
+		originalItemID, _ := body["ItemId"].(string)
+		itemName, itemType := a.resolveItemTitle(r, reqCtx, virtualItemID, originalItemID, serverID, body)
+
+		if !isAdmin && userID != "" {
+			_, _ = a.PlaybackLimiter.TryStartSession(&ActiveSession{
+				SessionKey:    sessionKey,
+				UserID:        userID,
+				Username:      username,
+				Client:        clientName,
+				ClientVersion: clientVer,
+				DeviceName:    deviceName,
+				DeviceID:      deviceID,
+				IP:            clientIP(r, a.ConfigStore.Snapshot().Server.TrustProxy),
+				ServerID:      serverID,
+				ServerName:    serverName,
+				ItemID:        virtualItemID,
+				ItemName:      itemName,
+				ItemType:      itemType,
+				PositionTicks: positionTicks,
+				RunTimeTicks:  runtimeTicks,
+				IsPaused:      isPaused,
+				PlayMethod:    playMethod,
+			}, serverMaxConcurrent, userMaxConcurrent)
+		} else if isAdmin {
+			a.PlaybackLimiter.RecordAdminSession(&ActiveSession{
+				SessionKey:    sessionKey,
+				UserID:        userID,
+				Username:      username,
+				Client:        clientName,
+				ClientVersion: clientVer,
+				DeviceName:    deviceName,
+				DeviceID:      deviceID,
+				IP:            clientIP(r, a.ConfigStore.Snapshot().Server.TrustProxy),
+				ServerID:      serverID,
+				ServerName:    serverName,
+				ItemID:        virtualItemID,
+				ItemName:      itemName,
+				ItemType:      itemType,
+				PositionTicks: positionTicks,
+				RunTimeTicks:  runtimeTicks,
+				IsPaused:      isPaused,
+				PlayMethod:    playMethod,
+			})
+		}
+		a.PlaybackLimiter.UpdateSessionProgress(sessionKey, positionTicks, runtimeTicks, isPaused, itemName, itemType)
+		if userID != "" && !isAdmin {
+			a.PlaybackLimiter.Heartbeat(userID, serverID)
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -337,19 +456,33 @@ func (a *App) handleSessionPlayingProgress(w http.ResponseWriter, r *http.Reques
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	if !a.isServerAllowed(requestContextFrom(r.Context()), serverID) {
+	reqCtx := requestContextFrom(r.Context())
+	if !a.isServerAllowed(reqCtx, serverID) {
 		writeJSON(w, http.StatusForbidden, map[string]any{"message": "Access denied"})
 		return
 	}
+
+	_, _, _, deviceID := extractClientDeviceInfo(r)
+	if dev, ok := body["DeviceId"].(string); ok && dev != "" {
+		deviceID = dev
+	}
+	userID := ""
+	if reqCtx != nil && reqCtx.ProxyUser != nil {
+		userID = reqCtx.ProxyUser.UserID
+	}
+	sessionKey := buildSessionKey(userID, deviceID)
+
+	if a.PlaybackLimiter != nil && a.PlaybackLimiter.IsKicked(sessionKey) {
+		writeJSON(w, http.StatusForbidden, map[string]any{"message": "会话已被管理员终止"})
+		return
+	}
+
 	client := a.Upstream.ClientByID(serverID)
 	if client == nil || !client.IsOnline() {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if err := a.forwardNoContent(r, client, http.MethodPost, "/Sessions/Playing/Progress", nil, body); err != nil {
-		// Progress used to swallow every error as 204. A preparation failure is the
-		// client's or the configuration's, and reporting it is what makes the
-		// failure visible instead of looking like a successful report.
 		if status, ok := preparationErrorStatus(err); ok {
 			writeJSON(w, status, preparationErrorBody(err))
 			return
@@ -357,7 +490,11 @@ func (a *App) handleSessionPlayingProgress(w http.ResponseWriter, r *http.Reques
 	}
 	a.recordSessionToWatchStore(r, virtualItemID, body, serverID, false)
 	if a.PlaybackLimiter != nil {
-		if reqCtx := requestContextFrom(r.Context()); reqCtx != nil && reqCtx.ProxyUser != nil && reqCtx.ProxyUser.Role != "admin" {
+		positionTicks, _ := numericInt64(body["PositionTicks"])
+		runtimeTicks, _ := numericInt64(body["RunTimeTicks"])
+		isPaused, _ := body["IsPaused"].(bool)
+		a.PlaybackLimiter.UpdateSessionProgress(sessionKey, positionTicks, runtimeTicks, isPaused, "", "")
+		if reqCtx != nil && reqCtx.ProxyUser != nil && reqCtx.ProxyUser.Role != "admin" {
 			a.PlaybackLimiter.Heartbeat(reqCtx.ProxyUser.UserID, serverID)
 		}
 	}
@@ -381,10 +518,22 @@ func (a *App) handleSessionPlayingStopped(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	if !a.isServerAllowed(requestContextFrom(r.Context()), serverID) {
+	reqCtx := requestContextFrom(r.Context())
+	if !a.isServerAllowed(reqCtx, serverID) {
 		writeJSON(w, http.StatusForbidden, map[string]any{"message": "Access denied"})
 		return
 	}
+
+	_, _, _, deviceID := extractClientDeviceInfo(r)
+	if dev, ok := body["DeviceId"].(string); ok && dev != "" {
+		deviceID = dev
+	}
+	userID := ""
+	if reqCtx != nil && reqCtx.ProxyUser != nil {
+		userID = reqCtx.ProxyUser.UserID
+	}
+	sessionKey := buildSessionKey(userID, deviceID)
+
 	client := a.Upstream.ClientByID(serverID)
 	if client == nil || !client.IsOnline() {
 		w.WriteHeader(http.StatusNoContent)
@@ -392,11 +541,10 @@ func (a *App) handleSessionPlayingStopped(w http.ResponseWriter, r *http.Request
 	}
 	if err := a.forwardNoContent(r, client, http.MethodPost, "/Sessions/Playing/Stopped", nil, body); err != nil {
 		if status, ok := preparationErrorStatus(err); ok {
-			// The stop still has to release the concurrency slot and record the local
-			// progress: leaving them behind would strand a playback permit.
 			a.recordSessionToWatchStore(r, virtualItemID, body, serverID, true)
 			if a.PlaybackLimiter != nil {
-				if reqCtx := requestContextFrom(r.Context()); reqCtx != nil && reqCtx.ProxyUser != nil && reqCtx.ProxyUser.Role != "admin" {
+				a.PlaybackLimiter.StopSession(sessionKey)
+				if reqCtx != nil && reqCtx.ProxyUser != nil && reqCtx.ProxyUser.Role != "admin" {
 					a.PlaybackLimiter.Stop(reqCtx.ProxyUser.UserID, serverID)
 				}
 			}
@@ -406,7 +554,8 @@ func (a *App) handleSessionPlayingStopped(w http.ResponseWriter, r *http.Request
 	}
 	a.recordSessionToWatchStore(r, virtualItemID, body, serverID, true)
 	if a.PlaybackLimiter != nil {
-		if reqCtx := requestContextFrom(r.Context()); reqCtx != nil && reqCtx.ProxyUser != nil && reqCtx.ProxyUser.Role != "admin" {
+		a.PlaybackLimiter.StopSession(sessionKey)
+		if reqCtx != nil && reqCtx.ProxyUser != nil && reqCtx.ProxyUser.Role != "admin" {
 			a.PlaybackLimiter.Stop(reqCtx.ProxyUser.UserID, serverID)
 		}
 	}
