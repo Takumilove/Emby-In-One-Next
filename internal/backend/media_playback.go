@@ -162,38 +162,13 @@ func (a *App) handlePlaybackInfo(w http.ResponseWriter, r *http.Request) {
 				if container == "" {
 					container = "mp4"
 				}
-				isRedirect := a.streamPlaybackMode(inst.Client) == "redirect"
-				if isRedirect {
-					upstreamParams := url.Values{}
-					if originalMSID != "" {
-						upstreamParams.Set("MediaSourceId", originalMSID)
-					}
-					upstreamParams.Set("Static", "true")
-					upstreamPath := "/Videos/" + inst.OriginalID + "/stream." + container
-					reqCtx := requestContextFrom(r.Context())
-					if builtURL, err := inst.Client.BuildURL(upstreamPath, upstreamParams, true, reqCtx); err == nil {
-						mediaSource["DirectStreamUrl"] = builtURL
-						mediaSource["Path"] = builtURL
-						mediaSource["Protocol"] = "Http"
-						mediaSource["IsRemote"] = true
-					} else {
-						proxyURL := url.Values{}
-						proxyURL.Set("MediaSourceId", virtualMSID)
-						proxyURL.Set("Static", "true")
-						if reqCtx != nil && reqCtx.ProxyToken != "" {
-							proxyURL.Set("api_key", reqCtx.ProxyToken)
-						}
-						mediaSource["DirectStreamUrl"] = "/Videos/" + r.PathValue("itemId") + "/stream." + container + "?" + proxyURL.Encode()
-					}
-				} else {
-					proxyURL := url.Values{}
-					proxyURL.Set("MediaSourceId", virtualMSID)
-					proxyURL.Set("Static", "true")
-					if reqCtx := requestContextFrom(r.Context()); reqCtx != nil && reqCtx.ProxyToken != "" {
-						proxyURL.Set("api_key", reqCtx.ProxyToken)
-					}
-					mediaSource["DirectStreamUrl"] = "/Videos/" + r.PathValue("itemId") + "/stream." + container + "?" + proxyURL.Encode()
+				proxyURL := url.Values{}
+				proxyURL.Set("MediaSourceId", virtualMSID)
+				proxyURL.Set("Static", "true")
+				if reqCtx := requestContextFrom(r.Context()); reqCtx != nil && reqCtx.ProxyToken != "" {
+					proxyURL.Set("api_key", reqCtx.ProxyToken)
 				}
+				mediaSource["DirectStreamUrl"] = "/Videos/" + r.PathValue("itemId") + "/stream." + container + "?" + proxyURL.Encode()
 			}
 			if transcodingURL, ok := mediaSource["TranscodingUrl"].(string); ok && transcodingURL != "" {
 				parsed, err := url.Parse(transcodingURL)
@@ -216,16 +191,14 @@ func (a *App) handlePlaybackInfo(w http.ResponseWriter, r *http.Request) {
 					mediaSource["TranscodingUrl"] = proxyPath + "?" + queryValues.Encode()
 				}
 			}
-			// Rewrite MediaSource.Path for Http protocol and MediaStreams[].DeliveryUrl (only when not redirect mode)
-			if a.streamPlaybackMode(inst.Client) != "redirect" {
-				if protocol, _ := mediaSource["Protocol"].(string); protocol == "Http" {
-					if msPath, ok := mediaSource["Path"].(string); ok && msPath != "" {
-						msPath = strings.ReplaceAll(msPath, inst.OriginalID, r.PathValue("itemId"))
-						if originalMSID != "" && originalMSID != inst.OriginalID {
-							msPath = strings.ReplaceAll(msPath, originalMSID, virtualMSID)
-						}
-						mediaSource["Path"] = msPath
+			// Rewrite MediaSource.Path for Http protocol and MediaStreams[].DeliveryUrl
+			if protocol, _ := mediaSource["Protocol"].(string); protocol == "Http" {
+				if msPath, ok := mediaSource["Path"].(string); ok && msPath != "" {
+					msPath = strings.ReplaceAll(msPath, inst.OriginalID, r.PathValue("itemId"))
+					if originalMSID != "" && originalMSID != inst.OriginalID {
+						msPath = strings.ReplaceAll(msPath, originalMSID, virtualMSID)
 					}
+					mediaSource["Path"] = msPath
 				}
 			}
 			if rawStreams, ok := mediaSource["MediaStreams"].([]any); ok {

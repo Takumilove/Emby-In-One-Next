@@ -115,10 +115,10 @@ func (l *PlaybackLimiter) TryStartSession(sess *ActiveSession, serverMaxConcurre
 
 	now := time.Now()
 
-	// 1. 检查是否已被管理员踢出
+	// 1. 检查是否处于刚被踢出的短时防抖期内
 	if kickUntil, ok := l.kickedSessions[sess.SessionKey]; ok {
 		if now.Before(kickUntil) {
-			return false, "该设备已被管理员踢出下线，暂不可播放"
+			return false, "该会话已被管理员终止，请稍候 5 秒后再试"
 		}
 		delete(l.kickedSessions, sess.SessionKey)
 	}
@@ -301,7 +301,7 @@ func (l *PlaybackLimiter) deleteSessionLocked(sessionKey string) {
 	}
 }
 
-// KickSession 按会话 ID 强制踢出会话，并加入临时封禁名单
+// KickSession 按会话 ID 强制踢出会话
 func (l *PlaybackLimiter) KickSession(sessionID string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -311,12 +311,27 @@ func (l *PlaybackLimiter) KickSession(sessionID string) bool {
 		return false
 	}
 	sessionKey := sess.SessionKey
-	l.kickedSessions[sessionKey] = time.Now().Add(10 * time.Minute)
+	// 5 秒短时防抖：仅阻断当前播放器后台自动重试，不长期封禁用户设备
+	l.kickedSessions[sessionKey] = time.Now().Add(5 * time.Second)
 	l.deleteSessionLocked(sessionKey)
 	return true
 }
 
-// IsKicked 查询设备/会话当前是否处于踢出封禁期内
+// ClearKick 解除指定会话或设备的踢出状态
+func (l *PlaybackLimiter) ClearKick(sessionKey string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.kickedSessions, sessionKey)
+}
+
+// ClearAllKicks 清空所有踢出限制
+func (l *PlaybackLimiter) ClearAllKicks() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.kickedSessions = make(map[string]time.Time)
+}
+
+// IsKicked 查询设备/会话当前是否处于踢出防抖期内
 func (l *PlaybackLimiter) IsKicked(sessionKey string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()

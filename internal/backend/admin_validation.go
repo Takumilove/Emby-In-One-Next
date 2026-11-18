@@ -23,7 +23,16 @@ func (a *App) adminFileServer() http.Handler {
 	if dir := detectPublicDir(); dir != "" {
 		handler = preferDiskFileServer(dir, handler)
 	}
-	return http.StripPrefix("/admin/", handler)
+	server := http.StripPrefix("/admin/", handler)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clean := path.Clean("/" + r.URL.Path)
+		if strings.HasSuffix(clean, "admin.html") || strings.HasSuffix(clean, "admin.js") || clean == "/" || clean == "" {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+		}
+		server.ServeHTTP(w, r)
+	})
 }
 
 // handleAdminPanel answers /admin/ with the panel markup instead of the directory
@@ -41,6 +50,9 @@ func (a *App) adminFileServer() http.Handler {
 // enough. http.StripPrefix copies the request before rewriting the path, so the
 // original is left alone for the redirect handler that shares it.
 func (a *App) handleAdminPanel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	page := r.Clone(r.Context())
 	pageURL := *page.URL
 	page.URL = &pageURL

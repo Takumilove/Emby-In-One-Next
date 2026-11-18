@@ -235,6 +235,12 @@ func normalizeEmbyPath(p string) string {
 
 func (a *App) prefixCompatMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 容错救援：拦截客户端字符串拼接畸变产生的路径（如 /embyhttps:/cherryemby.top/Videos/...）并 302 重定向
+		if targetURL, ok := a.rescueMangledStreamURL(r.URL.Path, r.URL.Query()); ok {
+			http.Redirect(w, r, targetURL, http.StatusFound)
+			return
+		}
+
 		normPath := normalizeEmbyPath(r.URL.Path)
 		if normPath != r.URL.Path {
 			clone := r.Clone(r.Context())
@@ -247,6 +253,59 @@ func (a *App) prefixCompatMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// rescueMangledStreamURL 检查请求路径是否包含客户端字符串直接拼接产生的异常重定向直链路径
+// 若包含，提取其中的真实媒体流端点并将虚拟 ID 还原为上游真实 ID，下发 302 重定向直链兜底
+func (a *App) rescueMangledStreamURL(rawPath string, query url.Values) (string, bool) {
+	lower := strings.ToLower(rawPath)
+	idx := strings.Index(lower, "http:/")
+	if idx == -1 {
+		idx = strings.Index(lower, "https:/")
+	}
+	if idx == -1 {
+		return "", false
+	}
+
+	rest := rawPath[idx:]
+	scheme := "http://"
+	if strings.HasPrefix(strings.ToLower(rest), "https:/") {
+		scheme = "https://"
+		rest = rest[7:]
+	} else if strings.HasPrefix(strings.ToLower(rest), "http:/") {
+		scheme = "http://"
+		rest = rest[6:]
+	}
+	rest = strings.TrimLeft(rest, "/")
+
+	slashIdx := strings.IndexByte(rest, '/')
+	if slashIdx == -1 {
+		return "", false
+	}
+	host := rest[:slashIdx]
+	streamPath := rest[slashIdx:]
+
+	for _, prefix := range []string{"/Videos/", "/Audio/"} {
+		if strings.HasPrefix(streamPath, prefix) {
+			sub := streamPath[len(prefix):]
+			subSlash := strings.IndexByte(sub, '/')
+			if subSlash != -1 {
+				virtualItemID := sub[:subSlash]
+				filePart := sub[subSlash:]
+				if a.IDStore != nil {
+					if res := a.IDStore.ResolveVirtualID(virtualItemID); res != nil {
+						streamPath = prefix + res.OriginalID + filePart
+					}
+				}
+			}
+		}
+	}
+
+	target := scheme + host + streamPath
+	if len(query) > 0 {
+		target += "?" + query.Encode()
+	}
+	return target, true
 }
 
 func (a *App) corsMiddleware(next http.Handler) http.Handler {
