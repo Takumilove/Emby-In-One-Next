@@ -25,7 +25,8 @@ createApp({
       showProxyModal: false, proxyForm: { name: '', url: '' },
       proxyTestState: { loading: false, result: null },
       userList: [], showUserModal: false, editUserId: null, userForm: { username: '', password: '', enabled: true, allowedServers: [], maxConcurrent: 1 },
-      userLibraryGroups: [], adminHomeOpen: false, adminLibraryGroups: [], libraryGroupsLoading: false
+      userLibraryGroups: [], adminHomeOpen: false, adminLibraryGroups: [], libraryGroupsLoading: false,
+      globalHidden: {}
     };
   },
   computed: { pageTitle() { return this.pages.find(p => p.id === this.currentPage)?.name || '管理面板'; },
@@ -211,7 +212,12 @@ createApp({
     },
     async saveProxy() { try { await this.api('/admin/api/proxies', { method:'POST', body:JSON.stringify(this.proxyForm) }); this.showProxyModal = false; await this.refreshProxies(); } catch(e) { alert('添加失败：' + (e.message || '未知错误')); } },
     async deleteProxy(id) { if(!confirm('删除代理？')) return; try { await this.api('/admin/api/proxies/'+id, { method:'DELETE' }); await this.refreshProxies(); } catch(e) { alert('删除失败：' + (e.message || '未知错误')); } },
-    async refreshUsers() { try { this.userList = await this.api('/admin/api/users'); } catch(e) { this.userList = []; } try { this.upstreamList = await this.api('/admin/api/upstream'); } catch(e) {} this.$nextTick(()=>lucide.createIcons()); },
+    async refreshUsers() {
+      try { this.userList = await this.api('/admin/api/users'); } catch(e) { this.userList = []; }
+      try { this.upstreamList = await this.api('/admin/api/upstream'); } catch(e) {}
+      try { const gh = await this.api('/admin/api/home-libraries'); this.globalHidden = gh.hidden || {}; } catch(e) { this.globalHidden = {}; }
+      this.$nextTick(()=>lucide.createIcons());
+    },
     openAddUser() { this.editUserId = null; this.userForm = { username:'', password:'', enabled:true, allowedServers:[], maxConcurrent: 1 }; this.userLibraryGroups = []; this.showUserModal = true; this.$nextTick(()=>lucide.createIcons()); },
     async editUser(u) {
       this.editUserId = u.id;
@@ -267,8 +273,29 @@ createApp({
         }
       }));
     },
-    toggleGroupAll(g, val) { g.hiddenIds = val ? g.libraries.map(l => l.id) : []; },
-    isGroupAllHidden(g) { return g.libraries.length > 0 && g.libraries.every(l => g.hiddenIds.includes(l.id)); },
+    isGlobalHidden(serverId, libId) {
+      return !!(this.globalHidden && this.globalHidden[serverId] && this.globalHidden[serverId].includes(libId));
+    },
+    getSelectableLibraries(g) {
+      return (g.libraries || []).filter(l => !this.isGlobalHidden(g.serverId, l.id));
+    },
+    toggleGroupAll(g, val) {
+      const selectable = this.getSelectableLibraries(g);
+      if (val) {
+        const current = new Set(g.hiddenIds);
+        selectable.forEach(l => current.add(l.id));
+        g.hiddenIds = Array.from(current);
+      } else {
+        const selectableIds = new Set(selectable.map(l => l.id));
+        g.hiddenIds = g.hiddenIds.filter(id => !selectableIds.has(id));
+      }
+    },
+    isGroupAllHidden(g) {
+      const selectable = this.getSelectableLibraries(g);
+      return selectable.length > 0 && selectable.every(l => g.hiddenIds.includes(l.id));
+    },
+    toggleGlobalGroupAll(g, val) { g.hiddenIds = val ? g.libraries.map(l => l.id) : []; },
+    isGlobalGroupAllHidden(g) { return g.libraries.length > 0 && g.libraries.every(l => g.hiddenIds.includes(l.id)); },
     groupHiddenPayload(groups) {
       const payload = {};
       for (const g of groups) {
@@ -291,8 +318,11 @@ createApp({
     },
     async saveAdminHome() {
       try {
-        await this.api('/admin/api/home-libraries', { method:'PUT', body:JSON.stringify({ hidden: this.groupHiddenPayload(this.adminLibraryGroups) }) });
+        const hidden = this.groupHiddenPayload(this.adminLibraryGroups);
+        await this.api('/admin/api/home-libraries', { method:'PUT', body:JSON.stringify({ hidden }) });
+        this.globalHidden = hidden;
         this.adminHomeOpen = false;
+        await this.refreshUsers();
       } catch(e) { alert('保存失败：' + (e.message || '未知错误')); }
     },
     async toggleUser(u) { try { const enabled = !u.enabled; await this.api('/admin/api/users/' + u.id, { method:'PUT', body:JSON.stringify({enabled}) }); await this.refreshUsers(); } catch(e) { alert('操作失败：' + (e.message || '未知错误')); } },

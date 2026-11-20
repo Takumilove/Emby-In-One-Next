@@ -210,3 +210,47 @@ func TestHiddenLibrariesDisabledWithoutDB(t *testing.T) {
 		}
 	})
 }
+
+func TestGlobalAndUserOverlayHiddenLibraries(t *testing.T) {
+	withHomeLibraryApp(t, func(app *App, handler http.Handler, viewsHits *atomic.Int32) {
+		adminToken := loginToken(t, handler, "secret")
+		serverID := app.Upstream.Clients()[0].ID
+
+		// 1. 全局隐藏 Movies (lib-1)
+		hideMovieLibrary(t, app)
+
+		// 2. 创建普通用户 alice，并为 alice 额外隐藏 Shows (lib-2)
+		aliceID := createTestUser(t, handler, adminToken, "alice", "alice12345")
+		aliceToken := loginTokenAs(t, handler, "alice", "alice12345")
+		if err := app.HiddenLibraries.SetServerHidden(aliceID, serverID, []string{"lib-2"}); err != nil {
+			t.Fatalf("SetServerHidden alice: %v", err)
+		}
+
+		// 3. 创建普通用户 bob，不配置任何额外隐藏
+		bobID := createTestUser(t, handler, adminToken, "bob", "bob123456")
+		bobToken := loginTokenAs(t, handler, "bob", "bob123456")
+
+		// 4. alice 访问 Views：Movies (全局隐藏) 和 Shows (用户额外隐藏) 都应该被过滤
+		rrAlice := doJSONRequest(t, handler, http.MethodGet, "/Users/"+aliceID+"/Views", nil, aliceToken)
+		if rrAlice.Code != http.StatusOK {
+			t.Fatalf("alice views status = %d, body=%s", rrAlice.Code, rrAlice.Body.String())
+		}
+		namesAlice := itemNamesFromPayload(t, rrAlice.Body.Bytes())
+		if hasName(namesAlice, "Movies") || hasName(namesAlice, "Shows") {
+			t.Fatalf("alice should have both Movies and Shows hidden, got %v", namesAlice)
+		}
+
+		// 5. bob 访问 Views：Movies (全局隐藏) 应该被过滤，但 Shows 保持可见
+		rrBob := doJSONRequest(t, handler, http.MethodGet, "/Users/"+bobID+"/Views", nil, bobToken)
+		if rrBob.Code != http.StatusOK {
+			t.Fatalf("bob views status = %d, body=%s", rrBob.Code, rrBob.Body.String())
+		}
+		namesBob := itemNamesFromPayload(t, rrBob.Body.Bytes())
+		if hasName(namesBob, "Movies") {
+			t.Fatalf("bob should inherit global hidden Movies, got %v", namesBob)
+		}
+		if !hasName(namesBob, "Shows") {
+			t.Fatalf("bob should still see Shows, got %v", namesBob)
+		}
+	})
+}

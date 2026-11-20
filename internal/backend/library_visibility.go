@@ -114,12 +114,50 @@ func (s *HiddenLibraryStore) HiddenForUser(userID string) map[string]map[string]
 	return (*curr)[userID]
 }
 
-// HiddenForRequest resolves the hidden map for a request's identity.
+// HiddenForRequest resolves the combined hidden map for a request's identity.
+// In the global baseline + user overlay model:
+// 1. The admin user's configuration under adminVisibilityUserID serves as the
+//    global baseline, applied to all users (including the admin).
+// 2. Regular users further inherit any user-specific hidden libraries configured
+//    specifically for their account (the union of global and user-specific sets).
 func (s *HiddenLibraryStore) HiddenForRequest(reqCtx *RequestContext) map[string]map[string]struct{} {
-	if reqCtx == nil {
+	if reqCtx == nil || reqCtx.ProxyUser == nil {
 		return nil
 	}
-	return s.HiddenForUser(visibilityUserID(reqCtx.ProxyUser))
+	globalHidden := s.HiddenForUser(adminVisibilityUserID)
+	if reqCtx.ProxyUser.Role == "admin" || reqCtx.ProxyUser.UserID == "" {
+		return globalHidden
+	}
+	userHidden := s.HiddenForUser(reqCtx.ProxyUser.UserID)
+	if len(globalHidden) == 0 {
+		return userHidden
+	}
+	if len(userHidden) == 0 {
+		return globalHidden
+	}
+
+	// Merge global hidden with user-specific hidden (union)
+	merged := make(map[string]map[string]struct{}, len(globalHidden)+len(userHidden))
+	for serverID, libs := range globalHidden {
+		merged[serverID] = libs
+	}
+	for serverID, userLibs := range userHidden {
+		globalLibs, exists := merged[serverID]
+		if !exists || len(globalLibs) == 0 {
+			merged[serverID] = userLibs
+			continue
+		}
+		// Combine libraries for servers where both have entries
+		combined := make(map[string]struct{}, len(globalLibs)+len(userLibs))
+		for libID := range globalLibs {
+			combined[libID] = struct{}{}
+		}
+		for libID := range userLibs {
+			combined[libID] = struct{}{}
+		}
+		merged[serverID] = combined
+	}
+	return merged
 }
 
 // SetServerHidden replaces the hidden library list of one (user, server) pair.
