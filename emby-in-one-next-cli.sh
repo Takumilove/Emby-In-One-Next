@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
 # ╔══════════════════════════════════════╗
-# ║   Emby In One Next 管理菜单 V1.0.2   ║
+# ║   Emby In One Next 管理菜单 V1.0.3   ║
 # ╚══════════════════════════════════════╝
 
 PROJECT_DIR="/opt/emby-in-one-next"
 if [[ ! -d "${PROJECT_DIR}" && -d "/opt/emby-in-one" ]]; then
   PROJECT_DIR="/opt/emby-in-one"
 fi
-VERSION="1.0.2"
+VERSION="1.0.3"
 SERVICE_NAME="emby-in-one-next"
 if ! systemctl list-unit-files --type=service 2>/dev/null | grep -q "^${SERVICE_NAME}\.service"; then
   if systemctl list-unit-files --type=service 2>/dev/null | grep -q "^emby-in-one\.service"; then
