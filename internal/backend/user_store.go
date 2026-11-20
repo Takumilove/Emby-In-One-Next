@@ -156,12 +156,17 @@ func (s *UserStore) CreateWithLimit(username, password string, allowedServers []
 		return nil, err
 	}
 
+	var allowedCopy []string
+	if len(allowedServers) > 0 {
+		allowedCopy = append([]string(nil), allowedServers...)
+	}
+
 	user := &User{
 		ID:             id,
 		Username:       username,
 		Password:       hashed,
 		Enabled:        true,
-		AllowedServers: append([]string(nil), allowedServers...),
+		AllowedServers: allowedCopy,
 		MaxConcurrent:  maxConcurrent,
 		CreatedAt:      now,
 	}
@@ -315,7 +320,11 @@ func (s *UserStore) UpdateWithLimit(id string, username *string, password *strin
 		user.MaxConcurrent = mc
 	}
 	if allowedServers != nil {
-		user.AllowedServers = append([]string(nil), *allowedServers...)
+		if len(*allowedServers) == 0 {
+			user.AllowedServers = nil
+		} else {
+			user.AllowedServers = append([]string(nil), *allowedServers...)
+		}
 	}
 
 	return nil

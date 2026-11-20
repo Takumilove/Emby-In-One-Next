@@ -77,7 +77,7 @@ func (a *App) allowedClients(reqCtx *RequestContext) []*UpstreamClient {
 	if reqCtx == nil || reqCtx.ProxyUser == nil {
 		return nil
 	}
-	if reqCtx.ProxyUser.AllowedServers == nil {
+	if len(reqCtx.ProxyUser.AllowedServers) == 0 {
 		return all
 	}
 	allowed := make(map[string]bool, len(reqCtx.ProxyUser.AllowedServers))
@@ -99,7 +99,7 @@ func (a *App) isServerAllowed(reqCtx *RequestContext, serverID string) bool {
 	if reqCtx == nil || reqCtx.ProxyUser == nil {
 		return false
 	}
-	if reqCtx.ProxyUser.AllowedServers == nil {
+	if len(reqCtx.ProxyUser.AllowedServers) == 0 {
 		return true
 	}
 	for _, id := range reqCtx.ProxyUser.AllowedServers {

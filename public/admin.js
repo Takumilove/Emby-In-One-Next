@@ -239,7 +239,7 @@ createApp({
           if (this.userForm.password && (this.userForm.password.length < 8 || this.userForm.password.length > 128)) { alert('密码长度必须介于 8 和 128 之间'); return; }
           if (this.userForm.password) body.password = this.userForm.password;
           body.enabled = this.userForm.enabled;
-          body.allowedServers = this.userForm.allowedServers.length > 0 ? this.userForm.allowedServers : null;
+          body.allowedServers = this.userForm.allowedServers || [];
           body.maxConcurrent = maxConcurrent;
           // 离线服务器不提交 key（后端保持原配置），在线服务器提交勾选结果（含空数组 = 全部显示）。
           body.hiddenLibraries = this.groupHiddenPayload(this.userLibraryGroups);
@@ -247,7 +247,7 @@ createApp({
         } else {
           if (!this.userForm.username || !this.userForm.password) { alert('用户名和密码不能为空'); return; }
           if (this.userForm.password.length < 8 || this.userForm.password.length > 128) { alert('密码长度必须介于 8 和 128 之间'); return; }
-          const body = { username:this.userForm.username, password:this.userForm.password, allowedServers: this.userForm.allowedServers.length > 0 ? this.userForm.allowedServers : null, maxConcurrent: maxConcurrent };
+          const body = { username:this.userForm.username, password:this.userForm.password, allowedServers: this.userForm.allowedServers || [], maxConcurrent: maxConcurrent };
           await this.api('/admin/api/users', { method:'POST', body:JSON.stringify(body) });
         }
         this.showUserModal = false; await this.refreshUsers();
